@@ -2,6 +2,8 @@
 name = "emir"
 version = "0.1.0"
 edition = "2024"
+description = "Just my try at graphic library. If you want to use it - you better have a real damn reason to"
+license = "GPL-3"
 exclude = [
     "src/main.rs",
     "font.ttf"
