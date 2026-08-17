@@ -23,7 +23,7 @@ fn main() {
         }
     }
     window_wrapper.write_buff(buffer.clone());
-    for (ind, color) in [Color::BLACK, Color::RED, Color::GREEN, Color::BLUE, Color::WHITE].iter().enumerate() {
+    for (ind, color) in [Color::BLACK, Color::RED, Color::GREEN, Color::DARKBLUE, Color::LIGHTBLUE, Color::MAGENTA, Color::YELLOW, Color::WHITE].iter().enumerate() {
         window_wrapper.draw_string(&font_manager, "HELLO!", 100.0, *color, 10, 10 + 100 * ind);
     }
 
