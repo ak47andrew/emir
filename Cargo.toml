@@ -1,0 +1,13 @@
+[package]
+name = "emir"
+version = "0.1.0"
+edition = "2024"
+exclude = [
+    "src/main.rs",
+    "font.ttf"
+]
+
+[dependencies]
+minifb = "0.28.0"
+bytemuck = { version = "1", features = ["derive"] }
+fontdue = "0.9.4"
