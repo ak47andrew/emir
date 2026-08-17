@@ -38,8 +38,9 @@ impl Color {
     pub fn lerp(&self, other: Color, t: f32) -> Color {
         #[inline]
         fn c(a: u8, b: u8, t: f32) -> u8 {
-            let (a, b) = (a.min(b), a.max(b));  // FIXME: probably wrong. Figure out tomorrow
-            (a as f32 + (b - a) as f32 * t).round() as u8
+            let a = a as f32;
+            let b = b as f32;
+            (a + (b - a) * t).round() as u8
         }
 
         Color::new(

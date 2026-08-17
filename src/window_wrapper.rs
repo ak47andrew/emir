@@ -57,15 +57,11 @@ impl WindowWrapper {
 
     pub fn draw_char(&mut self, font: &FontManager, c: char, size: f32, color: Color, x: usize, y: usize) {
         let (metrics, bitmap) = font.prepare_character(c, size);
-        // println!("{:?}", bitmap);
 
         for dy in 0..metrics.height {
             for dx in 0..metrics.width {
                 let coverage = bitmap[dy * metrics.width + dx];
-                if coverage > 0 {
-                    self.set_pixel(x + dx, y + dy, color);
-                }
-                // self.set_pixel(x + dx, y + dy, self.blend_pixel(x, y, color, coverage))
+                self.set_pixel(x + dx, y + dy, self.blend_pixel(x + dx, y + dy, color, coverage))
             }
         }
     }

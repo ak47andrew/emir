@@ -2,7 +2,8 @@ use std::fs;
 use fontdue::{Font, FontSettings, Metrics};
 
 pub struct FontManager {
-    font: Font
+    font: Font,
+    spacing: usize
 }
 
 impl FontManager {
@@ -10,11 +11,17 @@ impl FontManager {
         let font_data = fs::read(font_path).expect("File not found");
 
         FontManager {
-            font: Font::from_bytes(font_data, FontSettings::default()).expect("Failed to load font. Something is wrong with it ig")
+            font: Font::from_bytes(font_data, FontSettings::default()).expect("Failed to load font. Something is wrong with it ig"),
+            spacing: 0
         }
     }
 
     pub fn prepare_character(&self, c: char, px: f32) -> (Metrics, Vec<u8>) {
         self.font.rasterize(c, px)
+    }
+
+    pub fn with_spacing(mut self, spacing: usize) -> Self {
+        self.spacing = spacing;
+        self
     }
 }

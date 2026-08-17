@@ -2,12 +2,13 @@ use emir::color::Color;
 use emir::font_manager::FontManager;
 use emir::window_wrapper::{WindowWrapper};
 
-pub const WIDTH: usize = 1280;
-pub const HEIGHT: usize = 720;
+pub const WIDTH: usize = 1920;
+pub const HEIGHT: usize = 1080;
 
 fn main() {
     let mut window_wrapper = WindowWrapper::new(WIDTH, HEIGHT);
-    let font_manager = FontManager::new("font.ttf");
+    let font_manager = FontManager::new("font.ttf")
+        .with_spacing(10);
     let mut buffer: Vec<Color> = vec![Color::default(); WIDTH * HEIGHT];
 
     for y in 0..HEIGHT {
