@@ -8,7 +8,7 @@ pub const HEIGHT: usize = 1080;
 fn main() {
     let mut window_wrapper = WindowWrapper::new(WIDTH, HEIGHT);
     let font_manager = FontManager::new("font.ttf")
-        .with_spacing(10);
+        .with_spacing(3);
     let mut buffer: Vec<Color> = vec![Color::default(); WIDTH * HEIGHT];
 
     for y in 0..HEIGHT {

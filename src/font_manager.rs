@@ -3,7 +3,7 @@ use fontdue::{Font, FontSettings, Metrics};
 
 pub struct FontManager {
     font: Font,
-    spacing: usize
+    pub spacing: usize
 }
 
 impl FontManager {

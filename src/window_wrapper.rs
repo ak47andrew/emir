@@ -67,18 +67,20 @@ impl WindowWrapper {
     }
 
     pub fn draw_string(&mut self, font: &FontManager, s: &str, size: f32, color: Color, x: usize, y: usize) {
-        let spacing = 5;
         let chars = s.chars().collect::<Vec<char>>();
 
         let mut x = x;
         for c in chars {
             self.draw_char(&font, c, size, color, x, y);
-            x += spacing;
+            x += font.spacing;
             x += font.prepare_character(c, size).0.width;
         }
     }
 
     pub fn get_window(&self) -> &Window {
         &self.window
+    }
+    pub fn get_window_mut(&mut self) -> &mut Window {
+        &mut self.window
     }
 }
