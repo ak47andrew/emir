@@ -102,16 +102,14 @@ impl WindowWrapper {
 
     /// x, y - center of the circle
     pub fn draw_circle_fill(&mut self, x: usize, y: usize, r: u16, color: Color) {
-        // TODO: maybe do something with buffers and dropping it all at once? Idk, maybe later
         let r = r as i32;
-        let r_sq = r * r;
         for dx in -r..=r {
-            for dy in -r..=r {
-                let d_sq = dx * dx + dy * dy;
-                if d_sq <= r_sq {
-                    self.set_pixel((x as i32 + dx) as usize, (y as i32 + dy) as usize, color);
-                }
-            }
+            // Range for r^2 - dx^2 is [0; r^2] so we don't give a fuck about checking
+            let dy = (r * r - dx * dx).isqrt();
+            let dy_1 = -dy; let dy_2 = dy;
+            // This is also always positive so we can cast to usize without problems
+            let d = dy_2 - dy_1;
+            self.set_pixel_range_from_value((x as i32 + dx) as usize, (y as i32 + dy) as usize, d as usize, color);
         }
     }
 
