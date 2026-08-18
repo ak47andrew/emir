@@ -60,6 +60,12 @@ impl WindowWrapper {
         self.buff[start..(start + length)].copy_from_slice(colors);
     }
 
+    pub fn set_pixels_between_points(&mut self, y: usize, x1: usize, x2: usize, color: Color) {
+        let start = WindowWrapper::idx(x1, y, self.width);
+        let end = WindowWrapper::idx(x2, y, self.width);
+        self.buff[start..end].fill(color);
+    }
+
     pub fn get_pixel(&self, x: usize, y: usize) -> Color {
         self.buff[WindowWrapper::idx(x, y, self.width)]
     }
@@ -103,14 +109,12 @@ impl WindowWrapper {
     /// x, y - center of the circle
     pub fn draw_circle_fill(&mut self, x: usize, y: usize, r: u16, color: Color) {
         let r = r as i32;
-        for dx in -r..=r {
-            // Range for r^2 - dx^2 is [0; r^2] so we don't give a fuck about checking
-            let dy = (r * r - dx * dx).isqrt();
-            let dy_1 = -dy; let dy_2 = dy;
-            // This is also always positive so we can cast to usize without problems
-            let d = dy_2 - dy_1;
-            self.set_pixel_range_from_value((x as i32 + dy) as usize, (y as i32 + dx) as usize, d as usize, color);
-            self.update()
+        for dy in -r..=r {
+            // Range for r^2 - dy^2 is [0; r^2] so we don't give a fuck about checking
+            let dx = (r * r - dy * dy).isqrt();
+            let dx_1 = -dx; let dx_2 = dx;
+            self.set_pixels_between_points((y as i32 + dy) as usize, (x as i32 + dx_1) as usize, (x as i32 + dx_2) as usize, color);
+            self.update();
         }
     }
 
