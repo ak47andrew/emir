@@ -20,6 +20,16 @@ impl FontManager {
         self.font.rasterize(c, px)
     }
 
+    pub fn measure_string(&self, s: &str, px: f32) -> (usize, usize) {
+        let width = s
+            .chars()
+            .map(|c| self.prepare_character(c, px).0.width)
+            .sum::<usize>() + (s.len() - 1) * self.spacing;
+        let height = (s.chars().filter(|&x| x == '\n').count() + 1) * px as usize;
+
+        (width, height)
+    }
+
     pub fn with_spacing(mut self, spacing: usize) -> Self {
         self.spacing = spacing;
         self

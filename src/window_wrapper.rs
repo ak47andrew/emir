@@ -47,8 +47,31 @@ impl WindowWrapper {
         self.buff[WindowWrapper::idx(x, y, self.width)] = color;
     }
 
+    pub fn set_pixel_range_from_value(&mut self, x: usize, y: usize, length: usize, color: Color) {
+        let start = WindowWrapper::idx(x, y, self.width);
+        self.buff[start..(start + length)].fill(color);
+    }
+
+    pub fn set_pixel_range_from_array(&mut self, x: usize, y: usize, length: usize, colors: &[Color]) {
+        let start = WindowWrapper::idx(x, y, self.width);
+        if colors.len() != length {
+            panic!("Wrong buffer size!");
+        }
+        self.buff[start..(start + length)].copy_from_slice(colors);
+    }
+
     pub fn get_pixel(&self, x: usize, y: usize) -> Color {
         self.buff[WindowWrapper::idx(x, y, self.width)]
+    }
+
+    pub fn get_pixel_range(&self, x: usize, y: usize) -> &[Color] {
+        let start = WindowWrapper::idx(x, y, self.width);
+        &self.buff[start..(start + self.width)]
+    }
+
+    pub fn get_pixel_range_mut(&mut self, x: usize, y: usize) -> &mut [Color] {
+        let start = WindowWrapper::idx(x, y, self.width);
+        &mut self.buff[start..(start + self.width)]
     }
 
     fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Color {
@@ -74,6 +97,65 @@ impl WindowWrapper {
             self.draw_char(&font, c, size, color, x, y);
             x += font.spacing;
             x += font.prepare_character(c, size).0.width;
+        }
+    }
+
+    /// x, y - center of the circle
+    pub fn draw_circle_fill(&mut self, x: usize, y: usize, r: u16, color: Color) {
+        // TODO: maybe do something with buffers and dropping it all at once? Idk, maybe later
+        let r = r as i32;
+        let r_sq = r * r;
+        for dx in -r..=r {
+            for dy in -r..=r {
+                let d_sq = dx * dx + dy * dy;
+                if d_sq <= r_sq {
+                    self.set_pixel((x as i32 + dx) as usize, (y as i32 + dy) as usize, color);
+                }
+            }
+        }
+    }
+
+    /// x, y - center of the circle
+    pub fn draw_circle_stroke(&mut self, x: usize, y: usize, r: usize, color: Color) {
+        // TODO: add thickness bc one pixel is basically invisible
+        // Yeah, it's duplicated code. But at the moment, I don't give a fuck
+        let r = r as i32;
+        let r_sq = r * r;
+        for dx in -r..=r {
+            for dy in -r..=r {
+                let d_sq = dx * dx + dy * dy;
+                if d_sq == r_sq {
+                    self.set_pixel((x as i32 + dx) as usize, (y as i32 + dy) as usize, color);
+                }
+            }
+        }
+    }
+
+    pub fn draw_rect_fill(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
+        for dy in 0..h {
+            self.set_pixel_range_from_value(x, y + dy, w, color);
+        }
+    }
+
+    pub fn draw_rect_stroke(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
+        // TODO: add thickness (even tho one pixel here is much more visible)
+        match h {
+            0 => {},
+            1 => {
+                self.set_pixel_range_from_value(x, y, w, color);
+            },
+            2 => {
+                self.set_pixel_range_from_value(x, y, w, color);
+                self.set_pixel_range_from_value(x, y + 1, w, color);
+            }
+            _ => {
+                self.set_pixel_range_from_value(x, y, w, color);
+                for dy in 0..=h-2 {
+                    self.set_pixel(x, y + dy, color);
+                    self.set_pixel(x + w, y + dy, color);
+                }
+                self.set_pixel_range_from_value(x, y + h - 1, w, color);
+            }
         }
     }
 
