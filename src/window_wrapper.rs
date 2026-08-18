@@ -109,7 +109,7 @@ impl WindowWrapper {
             let dy_1 = -dy; let dy_2 = dy;
             // This is also always positive so we can cast to usize without problems
             let d = dy_2 - dy_1;
-            self.set_pixel_range_from_value((x as i32 + dx) as usize, (y as i32 + dy) as usize, d as usize, color);
+            self.set_pixel_range_from_value((x as i32 + dy) as usize, (y as i32 + dx) as usize, d as usize, color);
             self.update()
         }
     }
