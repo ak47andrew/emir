@@ -158,6 +158,73 @@ impl WindowWrapper {
         self.set_pixels_masked(x - r as usize, y - r as usize, array, color);
     }
 
+    pub fn draw_line_low(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: Color) {
+        let dx = x1 - x0;
+        let mut dy = y1 - y0;
+        let mut yi = 1;
+        if dy < 0 {
+            yi = -1;
+            dy = -dy;
+        }
+        let mut D = (2 * dy) - dx;
+        let mut y = y0;
+
+        for x in x0..=x1 {
+            self.set_pixel(x as usize, y as usize, color);
+            if D > 0 {
+                y = y + yi;
+                D += 2 * (dy - dx);
+            } else {
+                D += 2 * dy;
+            }
+        }
+    }
+
+    pub fn draw_line_high(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: Color) {
+        let mut dx = x1 - x0;
+        let dy = y1 - y0;
+        let mut xi = 1;
+        if dx < 0 {
+            xi = -1;
+            dx = -dx;
+        }
+        let mut D = 2 * dx - dy;
+        let mut x = x0;
+
+        for y in y0..=y1 {
+            self.set_pixel(x as usize, y as usize, color);
+            if D > 0 {
+                x = x + xi;
+                D += 2 * (dx - dy)
+            } else {
+                D += 2 * dx;
+            }
+        }
+    }
+
+    pub fn draw_line(&mut self, x0: usize, y0: usize, x1: usize, y1: usize, color: Color) {
+        // Bresenham's line algorithm: https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+        // I think because all of this is usizes, and we're handling x1 > x0 and y1 > y0, casting to and from i32 can't cause any trouble
+        let x0 = x0 as i32;
+        let y0 = y0 as i32;
+        let x1 = x1 as i32;
+        let y1 = y1 as i32;
+
+        if (y1 - y0).abs() < (x1 - x0).abs() {
+            if x0 > x1 {
+                self.draw_line_low(x1, y1, x0, y0, color);
+            } else {
+                self.draw_line_low(x0, y0, x1, y1, color);
+            }
+        } else {
+            if y0 > y1 {
+                self.draw_line_high(x1, y1, x0, y0, color);
+            } else {
+                self.draw_line_high(x0, y0, x1, y1, color);
+            }
+        }
+    }
+
     pub fn draw_rect_fill(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
         for dy in 0..h {
             self.set_pixel_range_from_value(x, y + dy, w, color);
