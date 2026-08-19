@@ -66,18 +66,29 @@ impl WindowWrapper {
         self.buff[start..end].fill(color);
     }
 
+    pub fn set_pixels_masked(&mut self, x: usize, y: usize, mask: Vec<Vec<bool>>, color: Color) {
+        for dy in 0..mask.len() {
+            let line = self.get_pixel_range_mut(x, y + dy, mask[dy].len());
+            for dx in 0..mask[dy].len() {
+                if mask[dy][dx] {
+                    line[dx] = color;
+                }
+            }
+        }
+    }
+
     pub fn get_pixel(&self, x: usize, y: usize) -> Color {
         self.buff[WindowWrapper::idx(x, y, self.width)]
     }
 
-    pub fn get_pixel_range(&self, x: usize, y: usize) -> &[Color] {
+    pub fn get_pixel_range(&self, x: usize, y: usize, length: usize) -> &[Color] {
         let start = WindowWrapper::idx(x, y, self.width);
-        &self.buff[start..(start + self.width)]
+        &self.buff[start..(start + length)]
     }
 
-    pub fn get_pixel_range_mut(&mut self, x: usize, y: usize) -> &mut [Color] {
+    pub fn get_pixel_range_mut(&mut self, x: usize, y: usize, length: usize) -> &mut [Color] {
         let start = WindowWrapper::idx(x, y, self.width);
-        &mut self.buff[start..(start + self.width)]
+        &mut self.buff[start..(start + length)]
     }
 
     fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Color {
@@ -114,24 +125,37 @@ impl WindowWrapper {
             let dx = (r * r - dy * dy).isqrt();
             let dx_1 = -dx; let dx_2 = dx;
             self.set_pixels_between_points((y as i32 + dy) as usize, (x as i32 + dx_1) as usize, (x as i32 + dx_2) as usize, color);
-            self.update();
         }
     }
 
     /// x, y - center of the circle
     pub fn draw_circle_stroke(&mut self, x: usize, y: usize, r: usize, color: Color) {
-        // TODO: add thickness bc one pixel is basically invisible
-        // Yeah, it's duplicated code. But at the moment, I don't give a fuck
+        // Midpoint Circle Algorithm: https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
+        // Yes, probably it's better to do straight to the source, but I'll do it by filling a matrix
+        // because it showed this way on Wikipedia, and I'm a baby and don't want to spend time translating more than needed
+        // (And this actually might be somewhat more performant tbh, but I'm not sure)
+        let mut array = vec![vec![false; 2 * r + 1]; 2 * r + 1];
         let r = r as i32;
-        let r_sq = r * r;
-        for dx in -r..=r {
-            for dy in -r..=r {
-                let d_sq = dx * dx + dy * dy;
-                if d_sq == r_sq {
-                    self.set_pixel((x as i32 + dx) as usize, (y as i32 + dy) as usize, color);
-                }
+        let mut cx = r;
+        let mut cy = 0i32;
+        let mut p = 1 - r;
+        const OFFSETS: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
+
+        while cx >= cy {
+            for (j, k) in OFFSETS {
+                array[(j * cx + r) as usize][(k * cy + r) as usize] = true;
+                array[(k * cy + r) as usize][(j * cx + r) as usize] = true;
+            }
+            cx -= if p > 0 {1} else {0};
+            cy += 1;
+            p += if p > 0 {
+                1 - 2 * cx + 2 * cy
+            } else {
+                1 + 2 * cy
             }
         }
+
+        self.set_pixels_masked(x - r as usize, y - r as usize, array, color);
     }
 
     pub fn draw_rect_fill(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {

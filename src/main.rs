@@ -32,8 +32,8 @@ fn main() {
 
     window_wrapper.draw_rect_fill(0, 0, text_width + 15, text_height * colors.len(), Color::BLACK);
     window_wrapper.draw_rect_stroke(0, 0, text_width + 15, text_height * colors.len(), Color::WHITE);
-    window_wrapper.draw_circle_fill(1000, 500, 300, Color::WHITE);
-    window_wrapper.draw_circle_stroke(1000, 500, 7, Color::RED);
+    window_wrapper.draw_circle_fill(1000, 500, 50, Color::WHITE);
+    window_wrapper.draw_circle_stroke(1000, 500, 50, Color::RED);
     for (ind, color) in colors.iter().enumerate() {
         window_wrapper.draw_string(&font_manager, text, 100.0, *color, 10, 10 + 100 * ind);
     }
