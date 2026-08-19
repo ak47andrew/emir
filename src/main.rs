@@ -28,7 +28,6 @@ fn main() {
     let text = "HELLO!";
     let px = 100.0;
     let (text_width, text_height) = font_manager.measure_string(text, px);
-    println!("{}x{}", text_width, text_height);
 
     window_wrapper.draw_rect_fill(0, 0, text_width + 15, text_height * colors.len(), Color::BLACK);
     window_wrapper.draw_rect_stroke(0, 0, text_width + 15, text_height * colors.len(), Color::WHITE);
