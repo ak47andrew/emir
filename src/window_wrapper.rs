@@ -166,6 +166,7 @@ impl WindowWrapper {
             yi = -1;
             dy = -dy;
         }
+        #[allow(nonstandard_style)]  // Shut up, it's math stuff
         let mut D = (2 * dy) - dx;
         let mut y = y0;
 
@@ -188,6 +189,7 @@ impl WindowWrapper {
             xi = -1;
             dx = -dx;
         }
+        #[allow(nonstandard_style)]  // Shut up, it's math stuff
         let mut D = 2 * dx - dy;
         let mut x = x0;
 
@@ -232,7 +234,6 @@ impl WindowWrapper {
     }
 
     pub fn draw_rect_stroke(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
-        // TODO: add thickness (even tho one pixel here is much more visible)
         match h {
             0 => {},
             1 => {

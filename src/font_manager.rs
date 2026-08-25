@@ -9,11 +9,14 @@ pub struct FontManager {
 impl FontManager {
     pub fn new(font_path: &str) -> FontManager {
         let font_data = fs::read(font_path).expect("File not found");
-
+        Self::from_raw(font_data)
+    }
+    
+    pub fn from_raw(font_data: Vec<u8>) -> FontManager {
         FontManager {
             font: Font::from_bytes(font_data, FontSettings::default()).expect("Failed to load font. Something is wrong with it ig"),
             spacing: 0
-        }
+        }        
     }
 
     pub fn prepare_character(&self, c: char, px: f32) -> (Metrics, Vec<u8>) {

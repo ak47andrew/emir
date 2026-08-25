@@ -7,7 +7,7 @@ pub const HEIGHT: usize = 1080;
 
 fn main() {
     let mut window_wrapper = WindowWrapper::new(WIDTH, HEIGHT);
-    let font_manager = FontManager::new("font.ttf")
+    let font_manager = FontManager::from_raw(Vec::from(include_bytes!("../font.ttf")))
         .with_spacing(3);
     let mut buffer: Vec<Color> = vec![Color::default(); WIDTH * HEIGHT];
 
