@@ -1,120 +1,98 @@
 use minifb::{Key, Window, WindowOptions};
 use crate::color::Color;
+use crate::error::{PixelBufferError, WindowError};
 use crate::font_manager::FontManager;
+use crate::pixel_buffer::PixelBuffer;
+use crate::window_options::WindowManagerOptions;
 
-pub struct WindowWrapper {
-    width: usize,
-    height: usize,
-
+pub struct WindowManager {
+    w: usize,
+    h: usize,
+    
     window: Window,
-    buff: Vec<Color>
+    buff: PixelBuffer,
 }
 
-impl WindowWrapper {
-    pub fn new(width: usize, height: usize) -> WindowWrapper {
-        let buff: Vec<Color> = vec![Color::default(); width * height];
+impl WindowManager {
+    pub fn new(w: usize, h: usize, options: WindowManagerOptions) -> Result<Self, WindowError> {
+        let buff: PixelBuffer = PixelBuffer::new(w, h);
 
         let mut window = Window::new(
-            "Interactive Pixel Buffer",
-            width,
-            height,
+            options.title.as_str(),
+            w,
+            h,
             WindowOptions::default(),
-        ).unwrap();
-        window.set_target_fps(60);
+        ).map_err(|x| WindowError::Create { source: x })?;
+        window.set_target_fps(options.fps_cap.unwrap_or(0) as usize);
 
-        WindowWrapper {buff, window, width, height}
+        Ok(WindowManager {buff, window, w, h})
     }
 
-    pub fn write_buff(&mut self, buff: Vec<Color>) {
-        if buff.len() != self.buff.len() {
-            panic!("Wrong buffer size!");
+    pub fn write_buff(&mut self, buff: PixelBuffer) -> Result<(), PixelBufferError> {
+        if !buff.will_it_fit(&self.buff) {
+            let (orig_w, orig_h) = self.buff.get_dimensions();
+            let (new_w, new_h) = buff.get_dimensions();
+            return Err(PixelBufferError::IncorrectBufferSize {
+                orig_w,
+                orig_h,
+                new_w,
+                new_h
+            })
         }
         self.buff = buff;
+        Ok(())
     }
 
-    pub fn update(&mut self) {
-        self.window.update_with_buffer(bytemuck::cast_slice(&self.buff), self.width, self.height).unwrap();
+    pub fn update(&mut self) -> Result<(), WindowError> {
+        self.window.update_with_buffer(self.buff.to_array(), self.w, self.h)
+            .map_err(|x| WindowError::Update { source: x })?;
+        Ok(())
     }
 
     pub fn is_should_close(&self) -> bool {
         !self.window.is_open() || self.window.is_key_down(Key::Escape)
     }
 
-    #[inline(always)]
-    fn idx(x: usize, y: usize, width: usize) -> usize {y * width + x}
-
-    pub fn set_pixel(&mut self, x: usize, y: usize, color: Color) {
-        self.buff[WindowWrapper::idx(x, y, self.width)] = color;
-    }
-
-    pub fn set_pixel_range_from_value(&mut self, x: usize, y: usize, length: usize, color: Color) {
-        let start = WindowWrapper::idx(x, y, self.width);
-        self.buff[start..(start + length)].fill(color);
-    }
-
-    pub fn set_pixel_range_from_array(&mut self, x: usize, y: usize, length: usize, colors: &[Color]) {
-        let start = WindowWrapper::idx(x, y, self.width);
-        if colors.len() != length {
-            panic!("Wrong buffer size!");
-        }
-        self.buff[start..(start + length)].copy_from_slice(colors);
-    }
-
-    pub fn set_pixels_between_points(&mut self, y: usize, x1: usize, x2: usize, color: Color) {
-        let start = WindowWrapper::idx(x1, y, self.width);
-        let end = WindowWrapper::idx(x2, y, self.width);
-        self.buff[start..end].fill(color);
-    }
-
-    pub fn set_pixels_masked(&mut self, x: usize, y: usize, mask: Vec<Vec<bool>>, color: Color) {
-        for dy in 0..mask.len() {
-            let line = self.get_pixel_range_mut(x, y + dy, mask[dy].len());
-            for dx in 0..mask[dy].len() {
-                if mask[dy][dx] {
-                    line[dx] = color;
-                }
-            }
-        }
-    }
-
-    pub fn get_pixel(&self, x: usize, y: usize) -> Color {
-        self.buff[WindowWrapper::idx(x, y, self.width)]
-    }
-
-    pub fn get_pixel_range(&self, x: usize, y: usize, length: usize) -> &[Color] {
-        let start = WindowWrapper::idx(x, y, self.width);
-        &self.buff[start..(start + length)]
-    }
-
-    pub fn get_pixel_range_mut(&mut self, x: usize, y: usize, length: usize) -> &mut [Color] {
-        let start = WindowWrapper::idx(x, y, self.width);
-        &mut self.buff[start..(start + length)]
-    }
-
-    fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Color {
-        self.get_pixel(x, y).lerp(color, alpha as f32 / 255.0)
+    fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Result<Color, PixelBufferError> {
+        Ok(self.buff.get_pixel(x, y)?.lerp(color, alpha as f32 / 255.0))
     }
 
     pub fn draw_char(&mut self, font: &FontManager, c: char, size: f32, color: Color, x: usize, y: usize) {
         let (metrics, bitmap) = font.prepare_character(c, size);
+        // if c == 'e' {
+        //     println!("{:?}", metrics);
+        //     panic!();
+        // }
+        if metrics.width == 0 || metrics.height == 0 {
+            return;
+        }
 
-        for dy in 0..metrics.height {
-            for dx in 0..metrics.width {
+        let free_x = self.w as i32 - x as i32;
+        let free_y = self.h as i32 - y as i32;
+        if free_x < 0 || free_y < 0 {
+            return;
+        }
+
+        for dy in 0..metrics.height.min(free_y as usize) {
+            for dx in 0..metrics.width.min(free_x as usize) {
                 let coverage = bitmap[dy * metrics.width + dx];
-                self.set_pixel(x + dx, y + dy, self.blend_pixel(x + dx, y + dy, color, coverage))
+                self.buff.set_pixel(x + dx, y + dy, self.blend_pixel(x + dx, y + dy, color, coverage).unwrap())
             }
         }
     }
 
     pub fn draw_string(&mut self, font: &FontManager, s: &str, size: f32, color: Color, x: usize, y: usize) {
-        let chars = s.chars().collect::<Vec<char>>();
+        let positions = font.layout(s, x, y, size);
 
-        let mut x = x;
-        for c in chars {
-            self.draw_char(&font, c, size, color, x, y);
-            x += font.spacing;
-            x += font.prepare_character(c, size).0.width;
+        for pos in positions {
+            self.draw_char(&font, pos.parent, size, color, pos.x as usize, pos.y as usize);
         }
+
+        // for c in chars {
+        //     self.draw_char(&font, c, size, color, x, y);
+        //     x += font.spacing;
+        //     x += font.prepare_character(c, size).0.advance_width as usize;
+        // }
     }
 
     /// x, y - center of the circle
@@ -124,7 +102,7 @@ impl WindowWrapper {
             // Range for r^2 - dy^2 is [0; r^2] so we don't give a fuck about checking
             let dx = (r * r - dy * dy).isqrt();
             let dx_1 = -dx; let dx_2 = dx;
-            self.set_pixels_between_points((y as i32 + dy) as usize, (x as i32 + dx_1) as usize, (x as i32 + dx_2) as usize, color);
+            self.buff.set_pixels_between_points((y as i32 + dy) as usize, (x as i32 + dx_1) as usize, (x as i32 + dx_2) as usize, color);
         }
     }
 
@@ -133,7 +111,8 @@ impl WindowWrapper {
         // Midpoint Circle Algorithm: https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
         // Yes, probably it's better to do straight to the source, but I'll do it by filling a matrix
         // because it showed this way on Wikipedia, and I'm a baby and don't want to spend time translating more than needed
-        // (And this actually might be somewhat more performant tbh, but I'm not sure)
+        // (And this actually might be somewhat more performant tbh, but I'm not sure) 
+        // Upd: (It's not, I'm just dumb)
         let mut array = vec![vec![false; 2 * r + 1]; 2 * r + 1];
         let r = r as i32;
         let mut cx = r;
@@ -155,7 +134,7 @@ impl WindowWrapper {
             }
         }
 
-        self.set_pixels_masked(x - r as usize, y - r as usize, array, color);
+        self.buff.set_pixels_masked(x - r as usize, y - r as usize, array, color);
     }
 
     pub fn draw_line_low(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: Color) {
@@ -171,7 +150,7 @@ impl WindowWrapper {
         let mut y = y0;
 
         for x in x0..=x1 {
-            self.set_pixel(x as usize, y as usize, color);
+            self.buff.set_pixel(x as usize, y as usize, color);
             if D > 0 {
                 y = y + yi;
                 D += 2 * (dy - dx);
@@ -194,7 +173,7 @@ impl WindowWrapper {
         let mut x = x0;
 
         for y in y0..=y1 {
-            self.set_pixel(x as usize, y as usize, color);
+            self.buff.set_pixel(x as usize, y as usize, color);
             if D > 0 {
                 x = x + xi;
                 D += 2 * (dx - dy)
@@ -229,7 +208,7 @@ impl WindowWrapper {
 
     pub fn draw_rect_fill(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
         for dy in 0..h {
-            self.set_pixel_range_from_value(x, y + dy, w, color);
+            self.buff.set_pixel_range_from_value(x, y + dy, w, color);
         }
     }
 
@@ -237,19 +216,19 @@ impl WindowWrapper {
         match h {
             0 => {},
             1 => {
-                self.set_pixel_range_from_value(x, y, w, color);
+                self.buff.set_pixel_range_from_value(x, y, w, color);
             },
             2 => {
-                self.set_pixel_range_from_value(x, y, w, color);
-                self.set_pixel_range_from_value(x, y + 1, w, color);
+                self.buff.set_pixel_range_from_value(x, y, w, color);
+                self.buff.set_pixel_range_from_value(x, y + 1, w, color);
             }
             _ => {
-                self.set_pixel_range_from_value(x, y, w, color);
-                for dy in 0..=h-2 {
-                    self.set_pixel(x, y + dy, color);
-                    self.set_pixel(x + w, y + dy, color);
+                self.buff.set_pixel_range_from_value(x, y, w, color);
+                for dy in 1..=h-2 {
+                    self.buff.set_pixel(x, y + dy, color);
+                    self.buff.set_pixel(x + w, y + dy, color);
                 }
-                self.set_pixel_range_from_value(x, y + h - 1, w, color);
+                self.buff.set_pixel_range_from_value(x, y + h - 1, w, color);
             }
         }
     }

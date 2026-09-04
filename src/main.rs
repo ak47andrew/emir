@@ -1,49 +1,50 @@
 use emir::color::Color;
 use emir::font_manager::FontManager;
-use emir::window_wrapper::{WindowWrapper};
+use emir::pixel_buffer::PixelBuffer;
+use emir::window_options::WindowManagerOptions;
+use emir::window_manager::{WindowManager};
 
 pub const WIDTH: usize = 1920;
 pub const HEIGHT: usize = 1080;
 
 fn main() {
-    let mut window_wrapper = WindowWrapper::new(WIDTH, HEIGHT);
-    let font_manager = FontManager::from_raw(Vec::from(include_bytes!("../font.ttf")))
-        .with_spacing(3);
-    let mut buffer: Vec<Color> = vec![Color::default(); WIDTH * HEIGHT];
+    // TODO: ready for commit, write a proper changelog
+    let options = WindowManagerOptions::new("Emir", Some(999));
+    let mut window_wrapper: WindowManager = WindowManager::new(WIDTH, HEIGHT, options).unwrap();
+    let font_manager = match FontManager::from_raw(Vec::from(include_bytes!("../font.ttf"))) {
+        Ok(m) => m.with_spacing(4),
+        Err(e) => {
+            println!("{}", e);
+            return;
+        }
+    };
+    let mut buffer: PixelBuffer = PixelBuffer::new(WIDTH, HEIGHT);
 
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
-            let index = y * WIDTH + x;
-
             let red = (255 * y / HEIGHT) as u8;
             let green = (255 * x / WIDTH) as u8;
             let blue = !red.min(!green);
 
-            buffer[index] = Color::new(red, green, blue);
+            buffer.set_pixel(x, y, Color::new(red, green, blue));
         }
     }
-    window_wrapper.write_buff(buffer.clone());
+    buffer.set_pixel_range_from_value(1900, 100, 1000, Color::RED);
+    window_wrapper.write_buff(buffer).unwrap();
 
-    let colors = [Color::RED, Color::GREEN, Color::DARKBLUE, Color::LIGHTBLUE, Color::MAGENTA, Color::YELLOW, Color::WHITE];
-    let text = "HELLO!";
-    let px = 100.0;
-    let (text_width, text_height) = font_manager.measure_string(text, px);
+    window_wrapper.draw_circle_fill(0, 0, 50, Color::RED);
+    // window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
 
-    window_wrapper.draw_rect_fill(0, 0, text_width + 15, text_height * colors.len(), Color::BLACK);
-    window_wrapper.draw_rect_stroke(0, 0, text_width + 15, text_height * colors.len(), Color::WHITE);
-    window_wrapper.draw_circle_fill(1000, 500, 50, Color::WHITE);
-    window_wrapper.draw_circle_stroke(1000, 500, 50, Color::RED);
-    for dx in [-1.0, -0.5, 0.0, 0.5, 1.0] {
-        for dy in [-1.0, -0.5, 0.0, 0.5, 1.0] {
-            if dx == 0.0 && dy == 0.0 { continue; }
-            window_wrapper.draw_line(500, 500, (500.0 + dx * 100.0) as usize, (500.0 + dy * 100.0) as usize, Color::BLACK);
-        }
-    }
-    for (ind, color) in colors.iter().enumerate() {
-        window_wrapper.draw_string(&font_manager, text, 100.0, *color, 10, 10 + 100 * ind);
-    }
+    window_wrapper.draw_string(
+        &font_manager,
+        "Really long text to try out the thing. Really, it should go out of the box. Why the fuck it's so ununiform btw? WTF is going on man?",
+        72.0,
+        Color::BLACK,
+        10,
+        10
+    );
 
     while !window_wrapper.is_should_close() {
-        window_wrapper.update();
+        window_wrapper.update().unwrap();
     }
 }

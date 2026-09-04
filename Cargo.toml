@@ -12,3 +12,4 @@ exclude = [
 minifb = "0.28.0"
 bytemuck = { version = "1", features = ["derive"] }
 fontdue = "0.9.4"
+thiserror = "2.0.20"
