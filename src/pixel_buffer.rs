@@ -68,7 +68,7 @@ impl PixelBuffer {
         }
         let is_ordered = x1 < x2;
         let is_x1_oob = x1 >= self.w;
-        let is_x2_oob = x2 >= self.h;
+        let is_x2_oob = x2 >= self.w;
 
         // Fucking hack, but it works, fine
         let (x1, x2) = match (is_ordered, is_x1_oob, is_x2_oob) {

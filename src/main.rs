@@ -8,7 +8,6 @@ pub const WIDTH: usize = 1920;
 pub const HEIGHT: usize = 1080;
 
 fn main() {
-    // TODO: ready for commit, write a proper changelog
     let options = WindowManagerOptions::new("Emir", Some(999));
     let mut window_wrapper: WindowManager = WindowManager::new(WIDTH, HEIGHT, options).unwrap();
     let font_manager = match FontManager::from_raw(Vec::from(include_bytes!("../font.ttf"))) {
