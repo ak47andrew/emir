@@ -101,8 +101,10 @@ impl WindowManager {
         for dy in -r..=r {
             // Range for r^2 - dy^2 is [0; r^2] so we don't give a fuck about checking
             let dx = (r * r - dy * dy).isqrt();
-            let dx_1 = -dx; let dx_2 = dx;
-            self.buff.set_pixels_between_points((y as i32 + dy) as usize, (x as i32 + dx_1) as usize, (x as i32 + dx_2) as usize, color);
+
+            let x1 = x as i32 - dx;
+            let x2 = x as i32 + dx;
+            self.buff.set_pixels_between_points((y as i32 + dy) as usize, x1.max(0) as usize, x2.max(0) as usize, color);
         }
     }
 

@@ -7,7 +7,6 @@ pub struct PixelBuffer {
     pub buff: Vec<Color>,
 }
 
-// TODO: optimize
 impl PixelBuffer {
     pub fn new(w: usize, h: usize) -> Self {
         Self { buff: vec![Color::default(); w * h], w, h }
@@ -60,38 +59,17 @@ impl PixelBuffer {
         self.buff[start..(start + length)].copy_from_slice(colors);
     }
 
-    /// Expects that x1 < x2. If not, it depends. If everything is in bounds, it's gonna fix it
-    /// but if more than two things are screwed... you're gonna get fucked :D
+    /// Expects that x1 <= x2. Caller is responsible for ensuring that
+    ///
+    /// ### Warning
+    /// Be careful about usize underflows. Something like -10 to 30 turns 18446744073709551606 to 30 and such will be ignored
     pub fn set_pixels_between_points(&mut self, y: usize, x1: usize, x2: usize, color: Color) {
-        if y >= self.h {
+        if y >= self.h || x1 > self.w || x1 > x2 {
             return;
         }
-        let is_ordered = x1 < x2;
-        let is_x1_oob = x1 >= self.w;
-        let is_x2_oob = x2 >= self.w;
-
-        // Fucking hack, but it works, fine
-        let (x1, x2) = match (is_ordered, is_x1_oob, is_x2_oob) {
-            (true, false, false) => {
-                (x1, x2)
-            }
-            (false, false, false) => {
-                (x2, x1)
-            }
-            (false, true, false) => {
-                (0, x2)
-            }
-            (true, false, true) => {
-                (x1, self.w - 1)
-            }
-            (false, true, true) => {
-                (0, self.w - 1)
-            }
-            _ => panic!("Your inputs are fucked. set_pixels_between_points(y={}, x1={}, x2={}, color={:x})",
-                            y, x1, x2, color.as_u32())
-        };
-        let start = PixelBuffer::idx(x1.min(self.w - 1), y, self.w);
-        let end = PixelBuffer::idx(x2.min(self.w - 1), y, self.w);
+        let x2 = x2.min(self.w);
+        let start = PixelBuffer::idx(x1, y, self.w);
+        let end = PixelBuffer::idx(x2, y, self.w);
         self.buff[start..end].fill(color);
     }
 
