@@ -32,7 +32,7 @@ fn main() {
     window_wrapper.write_buff(buffer).unwrap();
 
     window_wrapper.draw_circle_fill(0, 0, 50, Color::RED);
-    // window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
+    window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
 
     window_wrapper.draw_string(
         &font_manager,

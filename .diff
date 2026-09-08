@@ -1,0 +1,89 @@
+diff --git a/src/main.rs b/src/main.rs
+index d34309d..eefc57c 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -32,7 +32,7 @@ fn main() {
+     window_wrapper.write_buff(buffer).unwrap();
+ 
+     window_wrapper.draw_circle_fill(0, 0, 50, Color::RED);
+-    // window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
++    window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
+ 
+     window_wrapper.draw_string(
+         &font_manager,
+diff --git a/src/pixel_buffer.rs b/src/pixel_buffer.rs
+index 202d198..f2b152b 100644
+--- a/src/pixel_buffer.rs
++++ b/src/pixel_buffer.rs
+@@ -62,7 +62,7 @@ impl PixelBuffer {
+     /// Expects that x1 <= x2. Caller is responsible for ensuring that
+     ///
+     /// ### Warning
+-    /// Be careful about usize underflows. Something like -10 to 30 turns 18446744073709551606 to 30 and such will be ignored
++    /// Be careful about usize underflows. Something like -10 to 30 turns 18446744073709551606 to 30 and such will be ignored as invalid
+     pub fn set_pixels_between_points(&mut self, y: usize, x1: usize, x2: usize, color: Color) {
+         if y >= self.h || x1 > self.w || x1 > x2 {
+             return;
+diff --git a/src/window_manager.rs b/src/window_manager.rs
+index c2c0b18..9fe7048 100644
+--- a/src/window_manager.rs
++++ b/src/window_manager.rs
+@@ -59,10 +59,6 @@ impl WindowManager {
+ 
+     pub fn draw_char(&mut self, font: &FontManager, c: char, size: f32, color: Color, x: usize, y: usize) {
+         let (metrics, bitmap) = font.prepare_character(c, size);
+-        // if c == 'e' {
+-        //     println!("{:?}", metrics);
+-        //     panic!();
+-        // }
+         if metrics.width == 0 || metrics.height == 0 {
+             return;
+         }
+@@ -87,12 +83,6 @@ impl WindowManager {
+         for pos in positions {
+             self.draw_char(&font, pos.parent, size, color, pos.x as usize, pos.y as usize);
+         }
+-
+-        // for c in chars {
+-        //     self.draw_char(&font, c, size, color, x, y);
+-        //     x += font.spacing;
+-        //     x += font.prepare_character(c, size).0.advance_width as usize;
+-        // }
+     }
+ 
+     /// x, y - center of the circle
+@@ -111,21 +101,18 @@ impl WindowManager {
+     /// x, y - center of the circle
+     pub fn draw_circle_stroke(&mut self, x: usize, y: usize, r: usize, color: Color) {
+         // Midpoint Circle Algorithm: https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
+-        // Yes, probably it's better to do straight to the source, but I'll do it by filling a matrix
+-        // because it showed this way on Wikipedia, and I'm a baby and don't want to spend time translating more than needed
+-        // (And this actually might be somewhat more performant tbh, but I'm not sure) 
+-        // Upd: (It's not, I'm just dumb)
+-        let mut array = vec![vec![false; 2 * r + 1]; 2 * r + 1];
+         let r = r as i32;
+         let mut cx = r;
+         let mut cy = 0i32;
+         let mut p = 1 - r;
+         const OFFSETS: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
++        let x0 = x.wrapping_sub(r as usize);
++        let y0 = y.wrapping_sub(r as usize);
+ 
+         while cx >= cy {
+             for (j, k) in OFFSETS {
+-                array[(j * cx + r) as usize][(k * cy + r) as usize] = true;
+-                array[(k * cy + r) as usize][(j * cx + r) as usize] = true;
++                self.buff.set_pixel(x0.overflowing_add((j * cx + r) as usize).0, y0.overflowing_add((k * cy + r) as usize).0, color);
++                self.buff.set_pixel(x0.overflowing_add((k * cy + r) as usize).0, y0.overflowing_add((j * cx + r) as usize).0, color);
+             }
+             cx -= if p > 0 {1} else {0};
+             cy += 1;
+@@ -135,8 +122,6 @@ impl WindowManager {
+                 1 + 2 * cy
+             }
+         }
+-
+-        self.buff.set_pixels_masked(x - r as usize, y - r as usize, array, color);
+     }
+ 
+     pub fn draw_line_low(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: Color) {

@@ -62,7 +62,7 @@ impl PixelBuffer {
     /// Expects that x1 <= x2. Caller is responsible for ensuring that
     ///
     /// ### Warning
-    /// Be careful about usize underflows. Something like -10 to 30 turns 18446744073709551606 to 30 and such will be ignored
+    /// Be careful about usize underflows. Something like -10 to 30 turns 18446744073709551606 to 30 and such will be ignored as invalid
     pub fn set_pixels_between_points(&mut self, y: usize, x1: usize, x2: usize, color: Color) {
         if y >= self.h || x1 > self.w || x1 > x2 {
             return;
