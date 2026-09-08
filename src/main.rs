@@ -1,14 +1,17 @@
+use std::num::NonZeroU32;
+
 use emir::color::Color;
 use emir::font_manager::FontManager;
 use emir::pixel_buffer::PixelBuffer;
+use emir::texture::Texture;
+use emir::window_manager::WindowManager;
 use emir::window_options::WindowManagerOptions;
-use emir::window_manager::{WindowManager};
 
 pub const WIDTH: usize = 1920;
 pub const HEIGHT: usize = 1080;
 
 fn main() {
-    let options = WindowManagerOptions::new("Emir", Some(999));
+    let options = WindowManagerOptions::new("Emir", NonZeroU32::new(999));
     let mut window_wrapper: WindowManager = WindowManager::new(WIDTH, HEIGHT, options).unwrap();
     let font_manager = match FontManager::from_raw(Vec::from(include_bytes!("../font.ttf"))) {
         Ok(m) => m.with_spacing(4),
@@ -29,6 +32,10 @@ fn main() {
         }
     }
     buffer.set_pixel_range_from_value(1900, 100, 1000, Color::RED);
+
+    let img = Texture::from_file("output.jpg").unwrap();
+    buffer.blit_texture(10, 100, &img);
+
     window_wrapper.write_buff(buffer).unwrap();
 
     window_wrapper.draw_circle_fill(0, 0, 50, Color::RED);
@@ -43,7 +50,7 @@ fn main() {
         10
     );
 
-    while !window_wrapper.is_should_close() {
+    while !window_wrapper.should_close() {
         window_wrapper.update().unwrap();
     }
 }

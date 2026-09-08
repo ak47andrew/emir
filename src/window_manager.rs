@@ -1,14 +1,17 @@
-use minifb::{Key, Window, WindowOptions};
+use crate::Error;
 use crate::color::Color;
 use crate::error::{PixelBufferError, WindowError};
 use crate::font_manager::FontManager;
+use crate::key::Key;
+use crate::mouse_key::MouseKey;
 use crate::pixel_buffer::PixelBuffer;
 use crate::window_options::WindowManagerOptions;
+use minifb::{KeyRepeat, Window, WindowOptions};
 
 pub struct WindowManager {
     w: usize,
     h: usize,
-    
+
     window: Window,
     buff: PixelBuffer,
 }
@@ -17,15 +20,11 @@ impl WindowManager {
     pub fn new(w: usize, h: usize, options: WindowManagerOptions) -> Result<Self, WindowError> {
         let buff: PixelBuffer = PixelBuffer::new(w, h);
 
-        let mut window = Window::new(
-            options.title.as_str(),
-            w,
-            h,
-            WindowOptions::default(),
-        ).map_err(|x| WindowError::Create { source: x })?;
-        window.set_target_fps(options.fps_cap.unwrap_or(0) as usize);
+        let mut window = Window::new(options.title.as_str(), w, h, WindowOptions::default())
+            .map_err(|x| WindowError::Create { source: x })?;
+        window.set_target_fps(options.fps_cap.map_or(0, |value| value.get() as usize));
 
-        Ok(WindowManager {buff, window, w, h})
+        Ok(WindowManager { buff, window, w, h })
     }
 
     pub fn write_buff(&mut self, buff: PixelBuffer) -> Result<(), PixelBufferError> {
@@ -36,28 +35,43 @@ impl WindowManager {
                 orig_w,
                 orig_h,
                 new_w,
-                new_h
-            })
+                new_h,
+            });
         }
         self.buff = buff;
         Ok(())
     }
 
     pub fn update(&mut self) -> Result<(), WindowError> {
-        self.window.update_with_buffer(self.buff.to_array(), self.w, self.h)
+        self.window
+            .update_with_buffer(self.buff.to_array(), self.w, self.h)
             .map_err(|x| WindowError::Update { source: x })?;
         Ok(())
     }
 
-    pub fn is_should_close(&self) -> bool {
-        !self.window.is_open() || self.window.is_key_down(Key::Escape)
+    pub fn should_close(&self) -> bool {
+        !self.window.is_open() || self.window.is_key_down(minifb::Key::Escape)
     }
 
-    fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Result<Color, PixelBufferError> {
+    fn blend_pixel(
+        &self,
+        x: usize,
+        y: usize,
+        color: Color,
+        alpha: u8,
+    ) -> Result<Color, Error> {
         Ok(self.buff.get_pixel(x, y)?.lerp(color, alpha as f32 / 255.0))
     }
 
-    pub fn draw_char(&mut self, font: &FontManager, c: char, size: f32, color: Color, x: usize, y: usize) {
+    pub fn draw_char(
+        &mut self,
+        font: &FontManager,
+        c: char,
+        size: f32,
+        color: Color,
+        x: usize,
+        y: usize,
+    ) {
         let (metrics, bitmap) = font.prepare_character(c, size);
         if metrics.width == 0 || metrics.height == 0 {
             return;
@@ -72,16 +86,35 @@ impl WindowManager {
         for dy in 0..metrics.height.min(free_y as usize) {
             for dx in 0..metrics.width.min(free_x as usize) {
                 let coverage = bitmap[dy * metrics.width + dx];
-                self.buff.set_pixel(x + dx, y + dy, self.blend_pixel(x + dx, y + dy, color, coverage).unwrap())
+                self.buff.set_pixel(
+                    x + dx,
+                    y + dy,
+                    self.blend_pixel(x + dx, y + dy, color, coverage).unwrap(),
+                )
             }
         }
     }
 
-    pub fn draw_string(&mut self, font: &FontManager, s: &str, size: f32, color: Color, x: usize, y: usize) {
+    pub fn draw_string(
+        &mut self,
+        font: &FontManager,
+        s: &str,
+        size: f32,
+        color: Color,
+        x: usize,
+        y: usize,
+    ) {
         let positions = font.layout(s, x, y, size);
 
         for pos in positions {
-            self.draw_char(&font, pos.parent, size, color, pos.x as usize, pos.y as usize);
+            self.draw_char(
+                &font,
+                pos.parent,
+                size,
+                color,
+                pos.x as usize,
+                pos.y as usize,
+            );
         }
     }
 
@@ -94,7 +127,12 @@ impl WindowManager {
 
             let x1 = x as i32 - dx;
             let x2 = x as i32 + dx;
-            self.buff.set_pixels_between_points((y as i32 + dy) as usize, x1.max(0) as usize, x2.max(0) as usize, color);
+            self.buff.set_pixels_between_points(
+                (y as i32 + dy) as usize,
+                x1.max(0) as usize,
+                x2.max(0) as usize,
+                color,
+            );
         }
     }
 
@@ -111,10 +149,18 @@ impl WindowManager {
 
         while cx >= cy {
             for (j, k) in OFFSETS {
-                self.buff.set_pixel(x0.overflowing_add((j * cx + r) as usize).0, y0.overflowing_add((k * cy + r) as usize).0, color);
-                self.buff.set_pixel(x0.overflowing_add((k * cy + r) as usize).0, y0.overflowing_add((j * cx + r) as usize).0, color);
+                self.buff.set_pixel(
+                    x0.overflowing_add((j * cx + r) as usize).0,
+                    y0.overflowing_add((k * cy + r) as usize).0,
+                    color,
+                );
+                self.buff.set_pixel(
+                    x0.overflowing_add((k * cy + r) as usize).0,
+                    y0.overflowing_add((j * cx + r) as usize).0,
+                    color,
+                );
             }
-            cx -= if p > 0 {1} else {0};
+            cx -= if p > 0 { 1 } else { 0 };
             cy += 1;
             p += if p > 0 {
                 1 - 2 * cx + 2 * cy
@@ -132,7 +178,7 @@ impl WindowManager {
             yi = -1;
             dy = -dy;
         }
-        #[allow(nonstandard_style)]  // Shut up, it's math stuff
+        #[allow(nonstandard_style)] // Shut up, it's math stuff
         let mut D = (2 * dy) - dx;
         let mut y = y0;
 
@@ -155,7 +201,7 @@ impl WindowManager {
             xi = -1;
             dx = -dx;
         }
-        #[allow(nonstandard_style)]  // Shut up, it's math stuff
+        #[allow(nonstandard_style)] // Shut up, it's math stuff
         let mut D = 2 * dx - dy;
         let mut x = x0;
 
@@ -201,23 +247,50 @@ impl WindowManager {
 
     pub fn draw_rect_stroke(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
         match h {
-            0 => {},
+            0 => {}
             1 => {
                 self.buff.set_pixel_range_from_value(x, y, w, color);
-            },
+            }
             2 => {
                 self.buff.set_pixel_range_from_value(x, y, w, color);
                 self.buff.set_pixel_range_from_value(x, y + 1, w, color);
             }
             _ => {
                 self.buff.set_pixel_range_from_value(x, y, w, color);
-                for dy in 1..=h-2 {
+                for dy in 1..=h - 2 {
                     self.buff.set_pixel(x, y + dy, color);
                     self.buff.set_pixel(x + w, y + dy, color);
                 }
                 self.buff.set_pixel_range_from_value(x, y + h - 1, w, color);
             }
         }
+    }
+
+    pub fn is_key_down(&self, key: Key) -> bool {
+        let minifb_key = minifb::Key::from(key);
+        self.window.is_key_down(minifb_key)
+    }
+
+    pub fn is_key_up(&self, key: Key) -> bool {
+        let minifb_key = minifb::Key::from(key);
+        self.window.is_key_released(minifb_key)
+    }
+
+    pub fn is_key_pressed(&self, key: Key, is_key_repeat: bool) -> bool {
+        let minifb_key = minifb::Key::from(key);
+        self.window.is_key_pressed(minifb_key, if is_key_repeat {KeyRepeat::Yes} else {KeyRepeat::No})
+    }
+
+    pub fn get_mouse_pos(&self) -> Option<(f32, f32)> {
+        self.window.get_mouse_pos(minifb::MouseMode::Discard)
+    }
+
+    pub fn get_mouse_down(&self, mouse_key: MouseKey) -> bool {
+        self.window.get_mouse_down(minifb::MouseButton::from(mouse_key))
+    }
+
+    pub fn get_scroll_wheel(&self) -> f32 {
+        self.window.get_scroll_wheel().unwrap_or_default().1
     }
 
     pub fn get_window(&self) -> &Window {

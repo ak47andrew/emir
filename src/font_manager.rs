@@ -1,25 +1,30 @@
-use std::fs;
-use fontdue::{Font, FontSettings, Metrics};
-use fontdue::layout::{Layout, CoordinateSystem, LayoutSettings, TextStyle, GlyphPosition};
 use crate::error::FontError;
+use fontdue::layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle};
+use fontdue::{Font, FontSettings, Metrics};
+use std::fs;
 
 pub struct FontManager {
     font: Font,
-    pub spacing: usize
+    pub spacing: usize,
 }
 
 impl FontManager {
     pub fn new(font_path: &str) -> Result<FontManager, FontError> {
-        let font_data = fs::read(font_path)
-            .map_err(|x| FontError::Read {path: font_path.to_string(), source: x})?;
+        let font_data = fs::read(font_path).map_err(|x| FontError::Read {
+            path: font_path.to_string(),
+            source: x,
+        })?;
         Self::from_raw(font_data)
     }
-    
+
     pub fn from_raw(font_data: Vec<u8>) -> Result<FontManager, FontError> {
         Ok(FontManager {
-            font: Font::from_bytes(font_data, FontSettings::default())
-                .map_err(|x| FontError::Parse {reason: x.to_string()})?,
-            spacing: 0
+            font: Font::from_bytes(font_data, FontSettings::default()).map_err(|x| {
+                FontError::Parse {
+                    reason: x.to_string(),
+                }
+            })?,
+            spacing: 0,
         })
     }
 
@@ -31,7 +36,8 @@ impl FontManager {
         let width = s
             .chars()
             .map(|c| self.prepare_character(c, px).0.width)
-            .sum::<usize>() + (s.len() - 1) * self.spacing;
+            .sum::<usize>()
+            + (s.len() - 1) * self.spacing;
         let height = (s.chars().filter(|&x| x == '\n').count() + 1) * px as usize;
 
         (width, height)
