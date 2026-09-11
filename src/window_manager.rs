@@ -5,8 +5,8 @@ use crate::font_manager::FontManager;
 use crate::key::Key;
 use crate::mouse_key::MouseKey;
 use crate::pixel_buffer::PixelBuffer;
-use crate::window_options::WindowManagerOptions;
-use minifb::{KeyRepeat, Window, WindowOptions};
+use crate::window_options::{ResizeMode, WindowManagerOptions};
+use minifb::{KeyRepeat, ScaleMode, Window, WindowOptions};
 
 pub struct WindowManager {
     w: usize,
@@ -20,7 +20,16 @@ impl WindowManager {
     pub fn new(w: usize, h: usize, options: WindowManagerOptions) -> Result<Self, WindowError> {
         let buff: PixelBuffer = PixelBuffer::new(w, h);
 
-        let mut window = Window::new(options.title.as_str(), w, h, WindowOptions::default())
+        let mut window_options = WindowOptions::default();
+        if let Some(resize_mode) = options.resize_mode.as_ref() {
+            window_options.resize = true;
+            window_options.scale_mode = match resize_mode {
+                ResizeMode::Fit => ScaleMode::Stretch,
+                ResizeMode::FitPreserveAspectRatio => ScaleMode::AspectRatioStretch,
+                ResizeMode::Trim => ScaleMode::UpperLeft,
+            };
+        }
+        let mut window = Window::new(options.title.as_str(), w, h, window_options)
             .map_err(|x| WindowError::Create { source: x })?;
         window.set_target_fps(options.fps_cap.map_or(0, |value| value.get() as usize));
 

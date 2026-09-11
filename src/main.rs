@@ -5,13 +5,13 @@ use emir::font_manager::FontManager;
 use emir::pixel_buffer::PixelBuffer;
 use emir::texture::Texture;
 use emir::window_manager::WindowManager;
-use emir::window_options::WindowManagerOptions;
+use emir::window_options::{ResizeMode, WindowManagerOptions};
 
 pub const WIDTH: usize = 1920;
 pub const HEIGHT: usize = 1080;
 
 fn main() {
-    let options = WindowManagerOptions::new("Emir", NonZeroU32::new(999));
+    let options = WindowManagerOptions::new("Emir", NonZeroU32::new(999), Some(ResizeMode::Trim));
     let mut window_wrapper: WindowManager = WindowManager::new(WIDTH, HEIGHT, options).unwrap();
     let font_manager = match FontManager::from_raw(Vec::from(include_bytes!("../font.ttf"))) {
         Ok(m) => m.with_spacing(4),

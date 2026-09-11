@@ -1,12 +1,21 @@
 use std::num::NonZeroU32;
 
+#[derive(Default)]
+pub enum ResizeMode {
+    #[default]
+    Trim,
+    Fit,
+    FitPreserveAspectRatio,
+}
+
 pub struct WindowManagerOptions {
     pub fps_cap: Option<NonZeroU32>,
     pub title: String,
+    pub resize_mode: Option<ResizeMode>,
 }
 
 impl WindowManagerOptions {
-    pub fn new(title: &str, fps_cap: Option<NonZeroU32>) -> Self {
+    pub fn new(title: &str, fps_cap: Option<NonZeroU32>, resize_mode: Option<ResizeMode>) -> Self {
         #[cfg(debug_assertions)]
         {
             if let Some(fps_cap) = fps_cap {
@@ -27,15 +36,17 @@ impl WindowManagerOptions {
         Self {
             fps_cap,
             title: title.to_string(),
+            resize_mode,
         }
     }
 }
 
 impl Default for WindowManagerOptions {
     fn default() -> Self {
-        WindowManagerOptions {
+        Self {
             fps_cap: NonZeroU32::new(60),
             title: String::from("Emir app"),
+            resize_mode: None,
         }
     }
 }
