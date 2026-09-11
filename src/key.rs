@@ -3,7 +3,7 @@ macro_rules! shitty_enum {
         $vis enum $name {
             $($element_name),*
         }
-        
+
         impl From<minifb::Key> for Key {
             fn from(value: minifb::Key) -> Self {
                 match value {
@@ -14,7 +14,7 @@ macro_rules! shitty_enum {
                 }
             }
         }
-        
+
         impl From<Key> for minifb::Key {
             fn from(value: Key) -> Self {
                 match value {

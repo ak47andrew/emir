@@ -38,11 +38,11 @@ pub enum PixelBufferError {
         orig_h: usize,
         new_w: usize,
         new_h: usize,
-    }
+    },
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum BufferError { 
+pub enum BufferError {
     #[error("Invalid address/out of bounds. Trying to access {x}x{y} on a {w}x{h} buffer")]
     InvalidAddress {
         x: usize,
@@ -51,14 +51,15 @@ pub enum BufferError {
         h: usize,
     },
 
-    #[error("Length of the itrator ({iterator_size}) mod w ({w}) should be 0. It's not. Sad. We don't know what to do. Send help. Please. I'm dying. Right now. I'm so tired of writing this errro messsage alone. Someone please stop me")]
-    InvalidSize {
-        w: usize,
-        iterator_size: usize
-    },
+    #[error(
+        "Length of the itrator ({iterator_size}) mod w ({w}) should be 0. It's not. Sad. We don't know what to do. Send help. Please. I'm dying. Right now. I'm so tired of writing this errro messsage alone. Someone please stop me"
+    )]
+    InvalidSize { w: usize, iterator_size: usize },
 
-    #[error("Empty buffer provided. Can't get anything out of it. Don't know what to do. Please fix me :(")]
-    EmptyIteratorOnInit {}
+    #[error(
+        "Empty buffer provided. Can't get anything out of it. Don't know what to do. Please fix me :("
+    )]
+    EmptyIteratorOnInit {},
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -74,10 +75,9 @@ pub enum TextureError {
     DecodeError {
         path: Option<String>,
         #[source]
-        source: ImageError
+        source: ImageError,
     },
 }
-
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

@@ -53,13 +53,7 @@ impl WindowManager {
         !self.window.is_open() || self.window.is_key_down(minifb::Key::Escape)
     }
 
-    fn blend_pixel(
-        &self,
-        x: usize,
-        y: usize,
-        color: Color,
-        alpha: u8,
-    ) -> Result<Color, Error> {
+    fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Result<Color, Error> {
         Ok(self.buff.get_pixel(x, y)?.lerp(color, alpha as f32 / 255.0))
     }
 
@@ -108,7 +102,7 @@ impl WindowManager {
 
         for pos in positions {
             self.draw_char(
-                &font,
+                font,
                 pos.parent,
                 size,
                 color,
@@ -185,7 +179,7 @@ impl WindowManager {
         for x in x0..=x1 {
             self.buff.set_pixel(x as usize, y as usize, color);
             if D > 0 {
-                y = y + yi;
+                y += yi;
                 D += 2 * (dy - dx);
             } else {
                 D += 2 * dy;
@@ -208,7 +202,7 @@ impl WindowManager {
         for y in y0..=y1 {
             self.buff.set_pixel(x as usize, y as usize, color);
             if D > 0 {
-                x = x + xi;
+                x += xi;
                 D += 2 * (dx - dy)
             } else {
                 D += 2 * dx;
@@ -278,7 +272,14 @@ impl WindowManager {
 
     pub fn is_key_pressed(&self, key: Key, is_key_repeat: bool) -> bool {
         let minifb_key = minifb::Key::from(key);
-        self.window.is_key_pressed(minifb_key, if is_key_repeat {KeyRepeat::Yes} else {KeyRepeat::No})
+        self.window.is_key_pressed(
+            minifb_key,
+            if is_key_repeat {
+                KeyRepeat::Yes
+            } else {
+                KeyRepeat::No
+            },
+        )
     }
 
     pub fn get_mouse_pos(&self) -> Option<(f32, f32)> {
@@ -286,7 +287,8 @@ impl WindowManager {
     }
 
     pub fn get_mouse_down(&self, mouse_key: MouseKey) -> bool {
-        self.window.get_mouse_down(minifb::MouseButton::from(mouse_key))
+        self.window
+            .get_mouse_down(minifb::MouseButton::from(mouse_key))
     }
 
     pub fn get_scroll_wheel(&self) -> f32 {

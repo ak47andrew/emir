@@ -1,7 +1,7 @@
 use crate::error::FontError;
 use fontdue::layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle};
 use fontdue::{Font, FontSettings, Metrics};
-use std::fs;
+use std::{fs, slice};
 
 pub struct FontManager {
     font: Font,
@@ -52,7 +52,10 @@ impl FontManager {
             ..LayoutSettings::default()
         });
         // TODO: cloning font here is kinda expensive, but for now I can't find any better solution to it
-        layout.append(&[self.font.clone()], &TextStyle::new(s, font_size, 0));
+        layout.append(
+            slice::from_ref(&self.font),
+            &TextStyle::new(s, font_size, 0),
+        );
         // TODO: maybe also do something here?
         layout.glyphs().clone()
     }

@@ -4,12 +4,16 @@ use crate::error;
 pub struct Buffer<T> {
     pub w: usize,
     pub h: usize,
-    pub buff: Vec<T>
+    pub buff: Vec<T>,
 }
 
 impl<T: Default> Default for Buffer<T> {
     fn default() -> Self {
-        Self { w: Default::default(), h: Default::default(), buff: Default::default() }
+        Self {
+            w: Default::default(),
+            h: Default::default(),
+            buff: Default::default(),
+        }
     }
 }
 
@@ -59,14 +63,20 @@ impl<T> Buffer<T> {
     /// # Returns
     /// - an error if the given iterator is empty;
     /// - an error if the amount of elements of the given iterator is not divisable by `w` without a
-    /// remainder.
-    pub fn try_from_iterator(w: usize, iterator: impl Iterator<Item = T>) -> Result<Self, error::BufferError> {
+    ///   remainder.
+    pub fn try_from_iterator(
+        w: usize,
+        iterator: impl Iterator<Item = T>,
+    ) -> Result<Self, error::BufferError> {
         let buff: Vec<T> = iterator.collect();
         if buff.is_empty() {
             return Err(error::BufferError::EmptyIteratorOnInit {});
         }
-        if buff.len() % w != 0 {
-            return Err(error::BufferError::InvalidSize { w, iterator_size: buff.len() });
+        if !buff.len().is_multiple_of(w) {
+            return Err(error::BufferError::InvalidSize {
+                w,
+                iterator_size: buff.len(),
+            });
         }
         Ok(Self {
             w,

@@ -56,13 +56,11 @@ impl Color {
 
     pub fn lerp(&self, other: Color, t: f32) -> Color {
         macro_rules! lerp_channel {
-            ($self:expr, $other:expr) => {
-                {
-                    let a = $self as f32;
-                    let b = $other as f32;
-                    (a + (b - a) * t).round() as u8
-                }
-            };
+            ($self:expr, $other:expr) => {{
+                let a = $self as f32;
+                let b = $other as f32;
+                (a + (b - a) * t).round() as u8
+            }};
         }
 
         Color::new(

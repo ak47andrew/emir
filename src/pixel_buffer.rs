@@ -1,17 +1,17 @@
 use crate::buffer::Buffer;
 use crate::color::Color;
-use crate::error::{BufferError};
+use crate::error::BufferError;
 use crate::texture::Texture;
 
 #[derive(Clone, Debug)]
 pub struct PixelBuffer {
-    pub buff: Buffer<Color>
+    pub buff: Buffer<Color>,
 }
 
 impl PixelBuffer {
     pub fn new(w: usize, h: usize) -> Self {
         Self {
-            buff: Buffer::new(w, h)
+            buff: Buffer::new(w, h),
         }
     }
 
@@ -32,12 +32,7 @@ impl PixelBuffer {
 
     /// # Warning
     /// Works with raw bytes so wraparounds are expected
-    pub fn set_pixel_range_from_array(
-        &mut self,
-        x: usize,
-        y: usize,
-        colors: &[Color],
-    ) {
+    pub fn set_pixel_range_from_array(&mut self, x: usize, y: usize, colors: &[Color]) {
         if y >= self.buff.h || x >= self.buff.w {
             return;
         }
@@ -61,10 +56,10 @@ impl PixelBuffer {
     }
 
     pub fn set_pixels_masked(&mut self, x: usize, y: usize, mask: Vec<Vec<bool>>, color: Color) {
-        for dy in 0..mask.len() {
-            let line = self.get_pixel_range_mut(x, y + dy, mask[dy].len());
-            for dx in 0..mask[dy].len() {
-                if mask[dy][dx] {
+        for (dy, element) in mask.iter().enumerate() {
+            let line = self.get_pixel_range_mut(x, y + dy, element.len());
+            for dx in 0..element.len() {
+                if element[dx] {
                     line[dx] = color;
                 }
             }

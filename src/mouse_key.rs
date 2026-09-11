@@ -1,5 +1,7 @@
 pub enum MouseKey {
-    Left, Middle, Right,
+    Left,
+    Middle,
+    Right,
 }
 
 impl From<minifb::MouseButton> for MouseKey {
