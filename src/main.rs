@@ -41,8 +41,9 @@ fn main() {
     window_wrapper.draw_circle_fill(0, 0, 50, Color::RED);
     window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
 
-    window_wrapper.draw_string(
-        &font_manager,
+    let font_id = window_wrapper.load_font(font_manager);
+    _ = window_wrapper.draw_string(
+        font_id,
         "Really long text to try out the thing. Really, it should go out of the box. Why the fuck it's so ununiform btw? WTF is going on man?",
         72.0,
         Color::BLACK,

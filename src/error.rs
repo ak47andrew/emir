@@ -1,5 +1,7 @@
 use image::ImageError;
 
+use crate::window_manager::FontId;
+
 #[derive(thiserror::Error, Debug)]
 pub enum FontError {
     #[error("Failed to read font file at {path}: {source:?}")]
@@ -80,6 +82,12 @@ pub enum TextureError {
 }
 
 #[derive(thiserror::Error, Debug)]
+pub enum DrawError {
+    #[error("Font with specified FontId is not loaded (possibly already unloaded)")]
+    FontNotLoaded { font_id: FontId },
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
     Font(#[from] FontError),
@@ -95,4 +103,7 @@ pub enum Error {
 
     #[error(transparent)]
     Texture(#[from] TextureError),
+
+    #[error(transparent)]
+    Draw(#[from] DrawError),
 }

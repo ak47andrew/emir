@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::Error;
 use crate::color::Color;
-use crate::error::{PixelBufferError, WindowError};
+use crate::error::{DrawError, PixelBufferError, WindowError};
 use crate::font_manager::FontManager;
 use crate::key::Key;
 use crate::mouse_key::MouseKey;
@@ -8,12 +10,18 @@ use crate::pixel_buffer::PixelBuffer;
 use crate::window_options::{ResizeMode, WindowManagerOptions};
 use minifb::{KeyRepeat, ScaleMode, Window, WindowOptions};
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct FontId(u64);
+
 pub struct WindowManager {
     w: usize,
     h: usize,
 
     window: Window,
     buff: PixelBuffer,
+
+    loaded_fonts: HashMap<FontId, FontManager>,
+    next_font_id: FontId,
 }
 
 impl WindowManager {
@@ -33,7 +41,14 @@ impl WindowManager {
             .map_err(|x| WindowError::Create { source: x })?;
         window.set_target_fps(options.fps_cap.map_or(0, |value| value.get() as usize));
 
-        Ok(WindowManager { buff, window, w, h })
+        Ok(WindowManager {
+            buff,
+            window,
+            w,
+            h,
+            loaded_fonts: HashMap::new(),
+            next_font_id: FontId(0),
+        })
     }
 
     pub fn write_buff(&mut self, buff: PixelBuffer) -> Result<(), PixelBufferError> {
@@ -62,63 +77,111 @@ impl WindowManager {
         !self.window.is_open() || self.window.is_key_down(minifb::Key::Escape)
     }
 
-    fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Result<Color, Error> {
-        Ok(self.buff.get_pixel(x, y)?.lerp(color, alpha as f32 / 255.0))
+    fn blend_pixel_from(
+        buff: &PixelBuffer,
+        x: usize,
+        y: usize,
+        color: Color,
+        alpha: u8,
+    ) -> Result<Color, Error> {
+        Ok(buff.get_pixel(x, y)?.lerp(color, alpha as f32 / 255.0))
+    }
+
+    // fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Result<Color, Error> {
+    //     Self::blend_pixel_from(&self.buff, x, y, color, alpha)
+    // }
+
+    fn draw_char_font_into(
+        buff: &mut PixelBuffer,
+        font: &FontManager,
+        c: char,
+        size: f32,
+        color: Color,
+        position: (usize, usize),
+        buffer_size: (usize, usize),
+    ) -> bool {
+        let (x, y) = position;
+        let (w, h) = buffer_size;
+
+        let (metrics, bitmap) = font.prepare_character(c, size);
+        if metrics.width == 0 || metrics.height == 0 {
+            return false;
+        }
+
+        let Some(free_x) = w.checked_sub(x) else {
+            return false;
+        };
+        let Some(free_y) = h.checked_sub(y) else {
+            return false;
+        };
+        println!("{free_x} {free_y}");
+
+        for dy in 0..metrics.height.min(free_y) {
+            for dx in 0..metrics.width.min(free_x) {
+                let coverage = bitmap[dy * metrics.width + dx];
+                buff.set_pixel(
+                    x + dx,
+                    y + dy,
+                    Self::blend_pixel_from(buff, x + dx, y + dy, color, coverage).unwrap(),
+                )
+            }
+        }
+
+        true
     }
 
     pub fn draw_char(
         &mut self,
-        font: &FontManager,
+        font_id: FontId,
         c: char,
         size: f32,
         color: Color,
         x: usize,
         y: usize,
-    ) {
-        let (metrics, bitmap) = font.prepare_character(c, size);
-        if metrics.width == 0 || metrics.height == 0 {
-            return;
-        }
+    ) -> Result<bool, DrawError> {
+        let Some(font) = self.loaded_fonts.get(&font_id) else {
+            return Err(DrawError::FontNotLoaded { font_id });
+        };
 
-        let free_x = self.w as i32 - x as i32;
-        let free_y = self.h as i32 - y as i32;
-        if free_x < 0 || free_y < 0 {
-            return;
-        }
-
-        for dy in 0..metrics.height.min(free_y as usize) {
-            for dx in 0..metrics.width.min(free_x as usize) {
-                let coverage = bitmap[dy * metrics.width + dx];
-                self.buff.set_pixel(
-                    x + dx,
-                    y + dy,
-                    self.blend_pixel(x + dx, y + dy, color, coverage).unwrap(),
-                )
-            }
-        }
+        Ok(Self::draw_char_font_into(
+            &mut self.buff,
+            font,
+            c,
+            size,
+            color,
+            (x, y),
+            (self.w, self.h),
+        ))
     }
 
     pub fn draw_string(
         &mut self,
-        font: &FontManager,
+        font_id: FontId,
         s: &str,
         size: f32,
         color: Color,
         x: usize,
         y: usize,
-    ) {
+    ) -> Result<(), DrawError> {
+        let Some(font) = self.loaded_fonts.get(&font_id) else {
+            return Err(DrawError::FontNotLoaded { font_id });
+        };
+
         let positions = font.layout(s, x, y, size);
 
         for pos in positions {
-            self.draw_char(
+            Self::draw_char_font_into(
+                &mut self.buff,
                 font,
                 pos.parent,
                 size,
                 color,
-                pos.x as usize,
-                pos.y as usize,
+                (pos.x as usize, pos.y as usize),
+                (self.w, self.h),
             );
         }
+
+        Ok(())
     }
 
     /// x, y - center of the circle
@@ -309,5 +372,16 @@ impl WindowManager {
     }
     pub fn get_window_mut(&mut self) -> &mut Window {
         &mut self.window
+    }
+
+    pub fn load_font(&mut self, font: FontManager) -> FontId {
+        let id = self.next_font_id;
+        self.next_font_id.0 += 1;
+        self.loaded_fonts.insert(id, font);
+        id
+    }
+
+    pub fn unload_font(&mut self, font_id: FontId) -> Option<FontManager> {
+        self.loaded_fonts.remove(&font_id)
     }
 }
