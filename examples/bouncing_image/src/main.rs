@@ -11,7 +11,6 @@ pub const WIDTH: usize = 100;
 pub const HEIGHT: usize = 100;
 
 fn main() {
-    #[cfg(feature = "env_logger")]
     env_logger::init();
 
     let options = WindowManagerOptions::new("Emir", NonZeroU32::new(999), Some(ResizeMode::Trim));
