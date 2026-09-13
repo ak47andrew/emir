@@ -35,18 +35,6 @@ impl<T: Clone> Buffer<T> {
             h,
         }
     }
-
-    /// # Safety
-    /// Caller must ensure that x < self.w and y < self.h or you'll get UB (Ultimate banger)
-    #[inline]
-    pub unsafe fn get_unchecked(&self, x: usize, y: usize) -> T {
-        unsafe { self.buff.get_unchecked(Self::idx(x, y, self.w)).clone() }
-    }
-
-    #[inline]
-    pub fn get(&self, x: usize, y: usize) -> Option<T> {
-        self.buff.get(Self::idx(x, y, self.w)).cloned()
-    }
 }
 
 pub struct BufferIterator<T> {
@@ -114,6 +102,30 @@ impl<T> Buffer<T> {
             data: self.buff.into_boxed_slice(),
             position: 0,
         }
+    }
+
+    /// # Safety
+    /// Caller must ensure that x < self.w and y < self.h, or you'll get UB (Ultimate banger)
+    #[inline]
+    pub unsafe fn get_unchecked(&self, x: usize, y: usize) -> &T {
+        unsafe { self.buff.get_unchecked(Self::idx(x, y, self.w)) }
+    }
+
+    #[inline]
+    pub fn get(&self, x: usize, y: usize) -> Option<&T> {
+        self.buff.get(Self::idx(x, y, self.w))
+    }
+
+    /// # Safety
+    /// Caller must ensure that x < self.w and y < self.h, or you'll get UB (Ultimate banger)
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, x: usize, y: usize) -> &mut T {
+        unsafe { self.buff.get_unchecked_mut(Self::idx(x, y, self.w)) }
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut T> {
+        self.buff.get_mut(Self::idx(x, y, self.w))
     }
 }
 

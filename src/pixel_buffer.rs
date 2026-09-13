@@ -75,7 +75,7 @@ impl PixelBuffer {
                 h: self.buff.h,
             });
         }
-        unsafe { Ok(self.buff.get_unchecked(x, y)) }
+        unsafe { Ok(self.buff.get_unchecked(x, y)).cloned() }
     }
 
     pub fn get_pixel_range(&self, x: usize, y: usize, length: usize) -> &[Color] {
