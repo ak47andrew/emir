@@ -219,7 +219,6 @@ impl WindowManager {
         let Some(free_y) = h.checked_sub(y) else {
             return false;
         };
-        println!("{free_x} {free_y}");
 
         for dy in 0..metrics.height.min(free_y) {
             for dx in 0..metrics.width.min(free_x) {

@@ -11,12 +11,15 @@ pub const WIDTH: usize = 100;
 pub const HEIGHT: usize = 100;
 
 fn main() {
+    #[cfg(feature = "env_logger")]
+    env_logger::init();
+
     let options = WindowManagerOptions::new("Emir", NonZeroU32::new(999), Some(ResizeMode::Trim));
     let mut window_wrapper: WindowManager = WindowManager::new(WIDTH, HEIGHT, options).unwrap();
     let font_manager = match FontManager::from_raw(Vec::from(include_bytes!("../font.ttf"))) {
         Ok(m) => m.with_spacing(4),
         Err(e) => {
-            println!("{}", e);
+            eprintln!("{e}");
             return;
         }
     };
