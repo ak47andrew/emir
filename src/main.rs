@@ -51,7 +51,32 @@ fn main() {
         10
     );
 
+    let mut x_pos = 10.0f32;
+    let mut y_pos = 100.0f32;
+    let mut x_direction = 1.0;
+    let mut y_direction = 1.0;
+
     while !window_wrapper.should_close() {
+        let delta = window_wrapper.delta_time();
+        let size = window_wrapper.get_window_size();
+        let size = (size.0 as f32, size.1 as f32);
+        x_pos += (1000.0 * delta) * x_direction;
+        if x_pos >= size.0 {
+            x_direction *= -1.0;
+            x_pos = size.0;
+        } else if x_pos < 0.0 {
+            x_direction *= -1.0;
+            x_pos = 0.0;
+        }
+        y_pos += (1000.0 * delta) * y_direction;
+        if y_pos >= size.1 {
+            y_direction *= -1.0;
+            y_pos = size.1;
+        } else if y_pos < 0.0 {
+            y_direction *= -1.0;
+            y_pos = 0.0;
+        }
+        window_wrapper.with_buffer_mut(|buff| buff.blit_texture(x_pos as usize, y_pos as usize, &img));
         window_wrapper.update().unwrap();
     }
 }

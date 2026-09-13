@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use crate::Error;
 use crate::color::Color;
@@ -19,6 +20,9 @@ pub struct WindowManager {
 
     window: Window,
     buff: PixelBuffer,
+
+    last_render: Instant,
+    before_last_render: Instant,
 
     loaded_fonts: HashMap<FontId, FontManager>,
     next_font_id: FontId,
@@ -41,11 +45,15 @@ impl WindowManager {
             .map_err(|x| WindowError::Create { source: x })?;
         window.set_target_fps(options.fps_cap.map_or(0, |value| value.get() as usize));
 
+        let before_last_render = Instant::now();
+        let last_render = Instant::now();
         Ok(WindowManager {
             buff,
             window,
             w,
             h,
+            last_render,
+            before_last_render,
             loaded_fonts: HashMap::new(),
             next_font_id: FontId(0),
         })
@@ -70,6 +78,9 @@ impl WindowManager {
         self.window
             .update_with_buffer(self.buff.to_array(), self.w, self.h)
             .map_err(|x| WindowError::Update { source: x })?;
+        self.before_last_render = self.last_render;
+        self.last_render = Instant::now();
+
         Ok(())
     }
 
@@ -374,6 +385,26 @@ impl WindowManager {
         &mut self.window
     }
 
+    #[inline]
+    pub fn since_last_frame(&self) -> Duration {
+        self.last_render.duration_since(self.before_last_render)
+    }
+
+    #[inline(always)]
+    pub fn delta_time(&self) -> f32 {
+        self.since_last_frame().as_secs_f32()
+    }
+
+    #[inline(always)]
+    pub fn delta_time_f64(&self) -> f64 {
+        self.since_last_frame().as_secs_f64()
+    }
+
+    #[inline(always)]
+    pub fn get_window_size(&self) -> (usize, usize) {
+        self.window.get_size()
+    }
+
     pub fn load_font(&mut self, font: FontManager) -> FontId {
         let id = self.next_font_id;
         self.next_font_id.0 += 1;
@@ -383,5 +414,15 @@ impl WindowManager {
 
     pub fn unload_font(&mut self, font_id: FontId) -> Option<FontManager> {
         self.loaded_fonts.remove(&font_id)
+    }
+
+    #[inline(always)]
+    pub fn with_buffer(&self, func: impl FnOnce(&PixelBuffer)) {
+        func(&self.buff)
+    }
+
+    #[inline(always)]
+    pub fn with_buffer_mut(&mut self, func: impl FnOnce(&mut PixelBuffer)) {
+        func(&mut self.buff)
     }
 }
