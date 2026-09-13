@@ -85,6 +85,11 @@ pub enum TextureError {
 pub enum DrawError {
     #[error("Font with specified FontId is not loaded (possibly already unloaded)")]
     FontNotLoaded { font_id: FontId },
+
+    #[error(
+        "Function that draws to the buffer directly was called during render step. Use draw steps for that"
+    )]
+    DrawDuringRenderStep,
 }
 
 #[derive(thiserror::Error, Debug)]

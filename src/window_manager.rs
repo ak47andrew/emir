@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hint::cold_path;
 use std::time::{Duration, Instant};
 
 use crate::Error;
@@ -86,6 +87,8 @@ pub struct WindowManager {
 
     loaded_fonts: HashMap<FontId, FontManager>,
     next_font_id: FontId,
+
+    during_render_step: bool,
 }
 
 impl WindowManager {
@@ -118,31 +121,49 @@ impl WindowManager {
             draw_steps: vec![],
             loaded_fonts: HashMap::new(),
             next_font_id: FontId(0),
+            during_render_step: false,
         })
     }
 
-    pub fn write_buff(&mut self, buff: PixelBuffer) -> Result<(), PixelBufferError> {
+    #[must_use = "The whole reason this function exists is to easily propagate an error in case we are in a render step"]
+    #[inline(always)]
+    fn ensure_not_in_render_step(&self) -> Result<(), DrawError> {
+        if self.during_render_step {
+            cold_path();
+            return Err(DrawError::DrawDuringRenderStep);
+        }
+        Ok(())
+    }
+
+    pub fn write_buff(&mut self, buff: PixelBuffer) -> Result<(), Error> {
+        self.ensure_not_in_render_step()?;
+
         if !buff.will_it_fit(&self.buff) {
             let (orig_w, orig_h) = self.buff.get_dimensions();
             let (new_w, new_h) = buff.get_dimensions();
-            return Err(PixelBufferError::IncorrectBufferSize {
+            return Err(Error::PixelBuffer(PixelBufferError::IncorrectBufferSize {
                 orig_w,
                 orig_h,
                 new_w,
                 new_h,
-            });
+            }));
         }
         self.buff = buff;
         Ok(())
     }
 
-    pub fn update(&mut self) -> Result<(), WindowError> {
+    pub fn update(&mut self) -> Result<(), Error> {
+        self.ensure_not_in_render_step()?;
+        // TODO: Would probably be a good idea to make sure we aren't inside a draw step either.
+
         let size = self.get_window_size();
         if self.w != size.0 || self.h != size.1 {
             let mut buffer = PixelBuffer::new(size.0, size.1);
             self.w = size.0;
             self.h = size.1;
+            self.during_render_step = true;
             self.call_user_render_steps(&mut buffer);
+            self.during_render_step = false;
             self.buff = buffer;
             self.call_user_draw_steps();
         }
@@ -222,6 +243,8 @@ impl WindowManager {
         x: usize,
         y: usize,
     ) -> Result<bool, DrawError> {
+        self.ensure_not_in_render_step()?;
+
         let Some(font) = self.loaded_fonts.get(&font_id) else {
             return Err(DrawError::FontNotLoaded { font_id });
         };
@@ -246,6 +269,8 @@ impl WindowManager {
         x: usize,
         y: usize,
     ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         let Some(font) = self.loaded_fonts.get(&font_id) else {
             return Err(DrawError::FontNotLoaded { font_id });
         };
@@ -268,7 +293,15 @@ impl WindowManager {
     }
 
     /// x, y - center of the circle
-    pub fn draw_circle_fill(&mut self, x: usize, y: usize, r: u16, color: Color) {
+    pub fn draw_circle_fill(
+        &mut self,
+        x: usize,
+        y: usize,
+        r: u16,
+        color: Color,
+    ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         let r = r as i32;
         for dy in -r..=r {
             // Range for r^2 - dy^2 is [0; r^2] so we don't give a fuck about checking
@@ -283,10 +316,20 @@ impl WindowManager {
                 color,
             );
         }
+
+        Ok(())
     }
 
     /// x, y - center of the circle
-    pub fn draw_circle_stroke(&mut self, x: usize, y: usize, r: usize, color: Color) {
+    pub fn draw_circle_stroke(
+        &mut self,
+        x: usize,
+        y: usize,
+        r: usize,
+        color: Color,
+    ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         // Midpoint Circle Algorithm: https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
         let r = r as i32;
         let mut cx = r;
@@ -317,9 +360,20 @@ impl WindowManager {
                 1 + 2 * cy
             }
         }
+
+        Ok(())
     }
 
-    pub fn draw_line_low(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: Color) {
+    pub fn draw_line_low(
+        &mut self,
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        color: Color,
+    ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         let dx = x1 - x0;
         let mut dy = y1 - y0;
         let mut yi = 1;
@@ -340,9 +394,20 @@ impl WindowManager {
                 D += 2 * dy;
             }
         }
+
+        Ok(())
     }
 
-    pub fn draw_line_high(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, color: Color) {
+    pub fn draw_line_high(
+        &mut self,
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        color: Color,
+    ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         let mut dx = x1 - x0;
         let dy = y1 - y0;
         let mut xi = 1;
@@ -363,9 +428,18 @@ impl WindowManager {
                 D += 2 * dx;
             }
         }
+
+        Ok(())
     }
 
-    pub fn draw_line(&mut self, x0: usize, y0: usize, x1: usize, y1: usize, color: Color) {
+    pub fn draw_line(
+        &mut self,
+        x0: usize,
+        y0: usize,
+        x1: usize,
+        y1: usize,
+        color: Color,
+    ) -> Result<(), DrawError> {
         // Bresenham's line algorithm: https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
         // I think because all of this is usizes, and we're handling x1 > x0 and y1 > y0, casting to and from i32 can't cause any trouble
         let x0 = x0 as i32;
@@ -375,26 +449,46 @@ impl WindowManager {
 
         if (y1 - y0).abs() < (x1 - x0).abs() {
             if x0 > x1 {
-                self.draw_line_low(x1, y1, x0, y0, color);
+                self.draw_line_low(x1, y1, x0, y0, color)
             } else {
-                self.draw_line_low(x0, y0, x1, y1, color);
+                self.draw_line_low(x0, y0, x1, y1, color)
             }
         } else {
             if y0 > y1 {
-                self.draw_line_high(x1, y1, x0, y0, color);
+                self.draw_line_high(x1, y1, x0, y0, color)
             } else {
-                self.draw_line_high(x0, y0, x1, y1, color);
+                self.draw_line_high(x0, y0, x1, y1, color)
             }
         }
     }
 
-    pub fn draw_rect_fill(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
+    pub fn draw_rect_fill(
+        &mut self,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        color: Color,
+    ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         for dy in 0..h {
             self.buff.set_pixel_range_from_value(x, y + dy, w, color);
         }
+
+        Ok(())
     }
 
-    pub fn draw_rect_stroke(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
+    pub fn draw_rect_stroke(
+        &mut self,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        color: Color,
+    ) -> Result<(), DrawError> {
+        self.ensure_not_in_render_step()?;
+
         match h {
             0 => {}
             1 => {
@@ -413,6 +507,8 @@ impl WindowManager {
                 self.buff.set_pixel_range_from_value(x, y + h - 1, w, color);
             }
         }
+
+        Ok(())
     }
 
     pub fn is_key_down(&self, key: Key) -> bool {
@@ -520,12 +616,19 @@ impl WindowManager {
     }
 
     #[inline(always)]
-    pub fn with_buffer(&self, func: impl FnOnce(&PixelBuffer)) {
-        func(&self.buff)
+    pub fn with_buffer<T>(&self, func: impl FnOnce(&PixelBuffer) -> T) -> Result<T, DrawError> {
+        self.ensure_not_in_render_step()?;
+
+        Ok(func(&self.buff))
     }
 
     #[inline(always)]
-    pub fn with_buffer_mut(&mut self, func: impl FnOnce(&mut PixelBuffer)) {
-        func(&mut self.buff)
+    pub fn with_buffer_mut<T>(
+        &mut self,
+        func: impl FnOnce(&mut PixelBuffer) -> T,
+    ) -> Result<T, DrawError> {
+        self.ensure_not_in_render_step()?;
+
+        Ok(func(&mut self.buff))
     }
 }

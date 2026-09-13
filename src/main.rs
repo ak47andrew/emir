@@ -39,20 +39,24 @@ fn main() {
     let img = Texture::from_file("output.jpg").unwrap();
 
     window_wrapper.add_draw_step(|window_wrapper, _, _| {
-        window_wrapper.draw_circle_fill(0, 0, 50, Color::RED);
-        window_wrapper.draw_circle_stroke(0, 0, 50, Color::WHITE);
+        window_wrapper
+            .draw_circle_fill(0, 0, 50, Color::RED)
+            .unwrap();
+        window_wrapper
+            .draw_circle_stroke(0, 0, 50, Color::WHITE)
+            .unwrap();
     });
 
     let font_id = window_wrapper.load_font(font_manager);
     window_wrapper.add_draw_step(move |window_wrapper, _, _| {
-        _ = window_wrapper.draw_string(
+        window_wrapper.draw_string(
             font_id,
             "Really long text to try out the thing. Really, it should go out of the box. Why the fuck it's so ununiform btw? WTF is going on man?",
             72.0,
             Color::BLACK,
             10,
             10,
-        );
+        ).unwrap();
     });
 
     let mut x_pos = 10.0f32;
@@ -81,7 +85,8 @@ fn main() {
             y_pos = 0.0;
         }
         window_wrapper
-            .with_buffer_mut(|buff| buff.blit_texture(x_pos as usize, y_pos as usize, &img));
+            .with_buffer_mut(|buff| buff.blit_texture(x_pos as usize, y_pos as usize, &img))
+            .unwrap();
         window_wrapper.update().unwrap();
     }
 }
