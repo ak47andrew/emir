@@ -22,6 +22,7 @@ impl WindowManager {
 
         let mut window = Window::new(options.title.as_str(), w, h, WindowOptions::default())
             .map_err(|x| WindowError::Create { source: x })?;
+        log::info!("Initialized window");
         window.set_target_fps(options.fps_cap.map_or(0, |value| value.get() as usize));
 
         Ok(WindowManager { buff, window, w, h })

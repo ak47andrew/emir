@@ -12,11 +12,11 @@ impl WindowManagerOptions {
             if let Some(fps_cap) = fps_cap {
                 let fps_cap = fps_cap.get();
                 if fps_cap == 67 {
-                    println!("fps_cap=67. I'm not commenting on that or I'll get banned")
+                    log::debug!("fps_cap=67. I'm not commenting on that or I'll get banned")
                 } else if fps_cap == 69 {
-                    println!("fps_cap=69. nice :D")
+                    log::debug!("fps_cap=69. nice :D")
                 } else if fps_cap > 1000 {
-                    println!(
+                    log::debug!(
                         "fps_cap={}? Uhh... You know you can just set it to None and it'll go unlimited, right? You're weird, man",
                         fps_cap
                     );
