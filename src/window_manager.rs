@@ -11,6 +11,63 @@ use crate::pixel_buffer::PixelBuffer;
 use crate::window_options::{ResizeMode, WindowManagerOptions};
 use minifb::{KeyRepeat, ScaleMode, Window, WindowOptions};
 
+pub trait UserRenderStep {
+    fn call(
+        &mut self,
+        window_manger: &mut WindowManager,
+        new_size: (usize, usize),
+        buffer: &mut PixelBuffer,
+    );
+    fn clone(&self) -> Box<dyn UserRenderStep>;
+}
+
+pub trait UserUpdateStep {
+    fn call(&mut self, window_manger: &mut WindowManager, new_size: (usize, usize));
+    fn clone(&self) -> Box<dyn UserUpdateStep>;
+}
+
+impl<F: FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'static> UserRenderStep
+    for F
+{
+    fn call(
+        &mut self,
+        window_manager: &mut WindowManager,
+        new_size: (usize, usize),
+        buffer: &mut PixelBuffer,
+    ) {
+        self(window_manager, new_size.0, new_size.1, buffer)
+    }
+
+    fn clone(&self) -> Box<dyn UserRenderStep> {
+        Box::new(Clone::clone(self))
+    }
+}
+
+impl<F: FnMut(&mut WindowManager, usize, usize) + Clone + 'static> UserUpdateStep for F {
+    fn call(&mut self, window_manager: &mut WindowManager, new_size: (usize, usize)) {
+        self(window_manager, new_size.0, new_size.1)
+    }
+
+    fn clone(&self) -> Box<dyn UserUpdateStep> {
+        Box::new(Clone::clone(self))
+    }
+}
+
+struct UserUpdateStepBox(Box<dyn UserUpdateStep>);
+struct UserRenderStepBox(Box<dyn UserRenderStep>);
+
+impl Clone for UserUpdateStepBox {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl Clone for UserRenderStepBox {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct FontId(u64);
 
@@ -21,8 +78,11 @@ pub struct WindowManager {
     window: Window,
     buff: PixelBuffer,
 
-    last_render: Instant,
     before_last_render: Instant,
+    last_render: Instant,
+
+    render_steps: Vec<UserRenderStepBox>,
+    draw_steps: Vec<UserUpdateStepBox>,
 
     loaded_fonts: HashMap<FontId, FontManager>,
     next_font_id: FontId,
@@ -52,8 +112,10 @@ impl WindowManager {
             window,
             w,
             h,
-            last_render,
             before_last_render,
+            last_render,
+            render_steps: vec![],
+            draw_steps: vec![],
             loaded_fonts: HashMap::new(),
             next_font_id: FontId(0),
         })
@@ -75,6 +137,16 @@ impl WindowManager {
     }
 
     pub fn update(&mut self) -> Result<(), WindowError> {
+        let size = self.get_window_size();
+        if self.w != size.0 || self.h != size.1 {
+            let mut buffer = PixelBuffer::new(size.0, size.1);
+            self.w = size.0;
+            self.h = size.1;
+            self.call_user_render_steps(&mut buffer);
+            self.buff = buffer;
+            self.call_user_draw_steps();
+        }
+
         self.window
             .update_with_buffer(self.buff.to_array(), self.w, self.h)
             .map_err(|x| WindowError::Update { source: x })?;
@@ -403,6 +475,37 @@ impl WindowManager {
     #[inline(always)]
     pub fn get_window_size(&self) -> (usize, usize) {
         self.window.get_size()
+    }
+
+    pub fn add_render_step(
+        &mut self,
+        render_step: impl FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'static,
+    ) {
+        self.render_steps
+            .push(UserRenderStepBox(Box::new(render_step)));
+    }
+
+    pub fn add_draw_step(
+        &mut self,
+        draw_step: impl FnMut(&mut WindowManager, usize, usize) + Clone + 'static,
+    ) {
+        self.draw_steps.push(UserUpdateStepBox(Box::new(draw_step)));
+    }
+
+    fn call_user_render_steps(&mut self, buffer: &mut PixelBuffer) {
+        let size = self.get_window_size();
+
+        for mut step in self.render_steps.clone() {
+            step.0.call(self, size, buffer);
+        }
+    }
+
+    fn call_user_draw_steps(&mut self) {
+        let size = self.get_window_size();
+
+        for mut step in self.draw_steps.clone() {
+            step.0.call(self, size);
+        }
     }
 
     pub fn load_font(&mut self, font: FontManager) -> FontId {
