@@ -4,7 +4,7 @@ use image::{GenericImageView, ImageReader};
 
 use crate::{buffer::Buffer, color::Color, error::TextureError, pixel_buffer::PixelBuffer};
 
-/// An image loaded from disk into, ready to be blitted onto a [`PixelBuffer`]
+/// An image loaded from disk, ready to be blitted onto a [`PixelBuffer`]
 pub struct Texture {
     pub buff: PixelBuffer,
 }

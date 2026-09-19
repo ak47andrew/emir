@@ -155,8 +155,7 @@ impl WindowManager {
     /// Creates a new OS window of size `w`x`h` and its backing pixel buffer.
     ///
     /// # Errors
-    /// Returns [`WindowError::Create`] if the underlying `minifb` window
-    /// fails to open.
+    /// Returns [`WindowError::Create`] if an attempt to open the window failed
     pub fn new(w: usize, h: usize, options: WindowManagerOptions) -> Result<Self, WindowError> {
         let buff: PixelBuffer = PixelBuffer::new(w, h);
 
@@ -282,8 +281,8 @@ impl WindowManager {
         !self.window.is_open() || self.window.is_key_down(minifb::Key::Escape)
     }
 
-    /// Blends `color` onto the existing pixel at `(x, y)` in `buff`, using
-    /// `alpha` (0 = fully existing pixel, 255 = fully `color`).
+    /// Reads pixel at `(x, y)` from `buff`, blends it wit `color` using `alpha`
+    /// (0 = fully existing pixel, 255 = fully `color`) and returns it
     fn blend_pixel_from(
         buff: &PixelBuffer,
         x: usize,

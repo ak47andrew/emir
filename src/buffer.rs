@@ -48,7 +48,7 @@ impl<T: Default> Default for Buffer<T> {
 }
 
 impl<T: Default + Clone> Buffer<T> {
-    /// Creates a [`Buffer`] of specified size from using default value of T
+    /// Creates a [`Buffer`] of specified size and fills it with default values of T
     ///
     /// # Arguments
     /// - `w`: width of the buffer
@@ -69,7 +69,7 @@ impl<T: Default + Clone> Buffer<T> {
 }
 
 impl<T: Clone> Buffer<T> {
-    /// Creates a [`Buffer`] of specified size and fills it up with specified element
+    /// Creates a [Buffer] of specified size and fills it with the copies of specified element
     ///
     /// # Arguments
     /// - `w`: width of the buffer
@@ -158,7 +158,7 @@ impl<T> Buffer<T> {
     /// Element on the specified coordinates
     ///
     /// # Safety
-    /// Caller must ensure that x < self.w and y < self.h, or you might get UB
+    /// Caller must ensure that x < self.w and y < self.h, or you'll get a UB
     ///
     /// # Example
     /// ```
@@ -221,7 +221,7 @@ impl<T> Buffer<T> {
     ///
     /// # Requirements
     /// `iterator` must not be infinite because it is relied upon in order to collect the elements
-    /// of the buffer. If violated, can lead to program hanging or OOM (Objectively official money) errors
+    /// of the buffer. If violated, can lead to program hanging or OOM errors
     ///
     /// # Returns
     /// - an error if the given iterator is empty;
