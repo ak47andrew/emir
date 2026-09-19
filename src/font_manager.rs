@@ -1,7 +1,8 @@
 use crate::error::FontError;
+use crate::window_manager::WindowManager;
 use fontdue::layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle};
 use fontdue::{Font, FontSettings, Metrics};
-use std::{fs, slice};
+use std::{fs, io, slice};
 
 /// Struct responsible for loading and rasterizing text as well as generating layout for text-writing
 /// methods at [`WindowManager`]

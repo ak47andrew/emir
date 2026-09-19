@@ -12,6 +12,39 @@ use crate::pixel_buffer::PixelBuffer;
 use crate::window_options::{ResizeMode, WindowManagerOptions};
 use minifb::{KeyRepeat, ScaleMode, Window, WindowOptions};
 
+/// A user-supplied render step: runs when the window is resized, to redraw
+/// the buffer contents at the new size. See [`WindowManager::add_render_step`].
+/// In these functions you can't call any draw functions ([`WindowManager::draw_rect_fill`], etc.)
+/// and are forced to work with given buffer
+///
+/// Useful when you need to fill in the buffer with values (say, fill a background blue). If you need
+/// draw functions, consider using [`WindowManager::add_draw_step`]
+///
+/// Implemented automatically for any
+/// `FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'static`
+/// closure, so you normally won't implement this trait by hand.
+///
+/// ## Example
+/// ```
+/// use emir::prelude::{PixelBuffer, WindowManager, WindowManagerOptions, Color};
+/// let mut window_wrapper = WindowManager::new(1280, 720, WindowManagerOptions::default()).unwrap();
+///
+/// window_wrapper.add_render_step(|window_wrapper, width, height, buffer| {
+///     let _: &mut WindowManager = window_wrapper;
+///     let _: &mut PixelBuffer = buffer;
+///     for y in 0..height {
+///         for x in 0..width {
+///             let red = (255 * y / height) as u8;
+///             let green = (255 * x / width) as u8;
+///             let blue = !red.min(!green);
+///
+///             buffer.set_pixel(x, y, Color::new(red, green, blue));
+///         }
+///     }
+///     buffer.set_pixel_range_from_value(1900, 100, 1000, Color::RED);
+/// });
+///
+/// ```
 pub trait UserRenderStep {
     fn call(
         &mut self,
@@ -22,6 +55,12 @@ pub trait UserRenderStep {
     fn clone(&self) -> Box<dyn UserRenderStep>;
 }
 
+/// A user-supplied update/draw step: runs after a resize's render step has
+/// completed. See [`WindowManager::add_draw_step`].
+///
+/// Implemented automatically for any
+/// `FnMut(&mut WindowManager, usize, usize) + Clone + 'static` closure, so
+/// you normally won't implement this trait by hand.
 pub trait UserUpdateStep {
     fn call(&mut self, window_manger: &mut WindowManager, new_size: (usize, usize));
     fn clone(&self) -> Box<dyn UserUpdateStep>;
@@ -69,9 +108,30 @@ impl Clone for UserRenderStepBox {
     }
 }
 
+/// Opaque handle to a font loaded into a [`WindowManager`] via
+/// [`WindowManager::load_font`]. Used to reference that font in
+/// [`WindowManager::draw_char`] / [`WindowManager::draw_string`].
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct FontId(u64);
 
+/// Owns the OS window, the current pixel buffer, and all drawing/input
+/// state. This is the main entry point of the crate: create one with
+/// [`WindowManager::new`], draw into it each frame, and call
+/// [`WindowManager::update`] to present the frame and poll input.
+///
+/// ### Warning
+/// Buffer is not cleared between frames. If you want to clear it explicitly, consider doing something like this:
+/// ```
+/// use emir::prelude::{PixelBuffer, WindowManager, WindowManagerOptions};
+/// let mut window_manager = WindowManager::new(1280, 720, WindowManagerOptions::default()).unwrap();
+///
+/// while !window_manager.should_close() {
+///     window_manager.write_buff(PixelBuffer::new(1280, 720)).unwrap();  // <-- This line here
+///
+///     // Whatever you need to draw here...
+///     # break
+/// }
+/// ```
 pub struct WindowManager {
     w: usize,
     h: usize,
@@ -92,6 +152,11 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
+    /// Creates a new OS window of size `w`x`h` and its backing pixel buffer.
+    ///
+    /// # Errors
+    /// Returns [`WindowError::Create`] if the underlying `minifb` window
+    /// fails to open.
     pub fn new(w: usize, h: usize, options: WindowManagerOptions) -> Result<Self, WindowError> {
         let buff: PixelBuffer = PixelBuffer::new(w, h);
 
@@ -126,6 +191,12 @@ impl WindowManager {
         })
     }
 
+    /// Guards drawing methods against being called while a render step
+    /// (triggered by a resize, see [`Self::update`]) is in progress.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if currently inside a
+    /// render step.
     #[must_use = "The whole reason this function exists is to easily propagate an error in case we are in a render step"]
     #[inline(always)]
     fn ensure_not_in_render_step(&self) -> Result<(), DrawError> {
@@ -136,6 +207,13 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Replaces the entire backing buffer with `buff`.
+    ///
+    /// # Errors
+    /// Returns [`Error::PixelBuffer`] (via [`PixelBufferError::IncorrectBufferSize`])
+    /// if `buff`'s dimensions don't match the current window buffer's
+    /// dimensions (see [`PixelBuffer::will_it_fit`]), or [`Error`] wrapping
+    /// [`DrawError::DrawDuringRenderStep`] if called during a render step.
     pub fn write_buff(&mut self, buff: PixelBuffer) -> Result<(), Error> {
         self.ensure_not_in_render_step()?;
 
@@ -153,6 +231,17 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Presents the current buffer to the window and polls input/events.
+    /// Call this once per frame.
+    ///
+    /// If the window has been resized since the last call, this first
+    /// allocates a new buffer at the new size, runs all registered render
+    /// steps (see [`Self::add_render_step`]) to repopulate it, swaps it in,
+    /// and then runs all registered draw steps (see [`Self::add_draw_step`]).
+    ///
+    /// # Errors
+    /// Returns [`WindowError::Update`] if the underlying `minifb` buffer
+    /// update fails, or an error if called during a render step.
     pub fn update(&mut self) -> Result<(), Error> {
         self.ensure_not_in_render_step()?;
         // TODO: Would probably be a good idea to make sure we aren't inside a draw step either.
@@ -178,10 +267,23 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Returns `true` if the window has been closed or the Escape key is
+    /// currently held down. Use this as your update loop condition:
+    /// ```
+    /// use emir::prelude::{WindowManager, WindowManagerOptions};
+    /// let window_manager = WindowManager::new(100, 100, WindowManagerOptions::default()).unwrap();
+    ///
+    /// while !window_manager.should_close() {
+    ///     // do your update here
+    ///     # break
+    /// }
+    /// ```
     pub fn should_close(&self) -> bool {
         !self.window.is_open() || self.window.is_key_down(minifb::Key::Escape)
     }
 
+    /// Blends `color` onto the existing pixel at `(x, y)` in `buff`, using
+    /// `alpha` (0 = fully existing pixel, 255 = fully `color`).
     fn blend_pixel_from(
         buff: &PixelBuffer,
         x: usize,
@@ -196,6 +298,12 @@ impl WindowManager {
     //     Self::blend_pixel_from(&self.buff, x, y, color, alpha)
     // }
 
+    /// Rasterizes a single glyph of `c` at `size` from `font` into `buff` at
+    /// `position`, alpha-blending each covered pixel with `color`.
+    /// `buffer_size` is used to clip the glyph to the buffer's bounds.
+    ///
+    /// Returns `false` (and draws nothing) if the glyph has zero width or
+    /// height (e.g. whitespace); `true` otherwise.
     fn draw_char_font_into(
         buff: &mut PixelBuffer,
         font: &FontManager,
@@ -234,6 +342,16 @@ impl WindowManager {
         true
     }
 
+    /// Draws a single character `c` using the font referenced by `font_id`,
+    /// at font `size`, in `color`, with its origin at `(x, y)`.
+    ///
+    /// Returns `Ok(false)` if the glyph was empty (e.g. whitespace) and
+    /// nothing was drawn, `Ok(true)` otherwise.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::FontNotLoaded`] if `font_id` doesn't correspond
+    /// to a currently loaded font, or [`DrawError::DrawDuringRenderStep`] if
+    /// called during a render step.
     pub fn draw_char(
         &mut self,
         font_id: FontId,
@@ -260,6 +378,13 @@ impl WindowManager {
         ))
     }
 
+    /// Lays out and draws the string `s` using the font referenced by
+    /// `font_id`, at font `size`, in `color`, starting at `(x, y)`.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::FontNotLoaded`] if `font_id` doesn't correspond
+    /// to a currently loaded font, or [`DrawError::DrawDuringRenderStep`] if
+    /// called during a render step.
     pub fn draw_string(
         &mut self,
         font_id: FontId,
@@ -292,7 +417,11 @@ impl WindowManager {
         Ok(())
     }
 
-    /// x, y - center of the circle
+    /// Draws a filled circle of radius `r` centered at `(x, y)`.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     pub fn draw_circle_fill(
         &mut self,
         x: usize,
@@ -320,7 +449,12 @@ impl WindowManager {
         Ok(())
     }
 
-    /// x, y - center of the circle
+    /// Draws a circle outline (stroke) of radius `r` centered at `(x, y)`,
+    /// using the midpoint circle algorithm.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     pub fn draw_circle_stroke(
         &mut self,
         x: usize,
@@ -364,7 +498,7 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn draw_line_low(
+    fn draw_line_low(
         &mut self,
         x0: i32,
         y0: i32,
@@ -398,7 +532,7 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn draw_line_high(
+    fn draw_line_high(
         &mut self,
         x0: i32,
         y0: i32,
@@ -432,6 +566,12 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Draws a straight line from `(x0, y0)` to `(x1, y1)` using
+    /// Bresenham's line algorithm
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     pub fn draw_line(
         &mut self,
         x0: usize,
@@ -462,6 +602,11 @@ impl WindowManager {
         }
     }
 
+    /// Draws a filled rectangle with top-left corner `(x, y)` and size `w`x`h`.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     pub fn draw_rect_fill(
         &mut self,
         x: usize,
@@ -479,6 +624,12 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Draws a rectangle outline (stroke, 1px wide) with top-left corner
+    /// `(x, y)` and size `w`x`h`.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     pub fn draw_rect_stroke(
         &mut self,
         x: usize,
@@ -511,16 +662,21 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Returns `true` if `key` is currently held down.
     pub fn is_key_down(&self, key: Key) -> bool {
         let minifb_key = minifb::Key::from(key);
         self.window.is_key_down(minifb_key)
     }
 
+    /// Returns `true` if `key` was released since the last [`Self::update`].
     pub fn is_key_up(&self, key: Key) -> bool {
         let minifb_key = minifb::Key::from(key);
         self.window.is_key_released(minifb_key)
     }
 
+    /// Returns `true` if `key` was pressed since the last [`Self::update`].
+    /// If `is_key_repeat` is `true`, held-down auto-repeat presses also
+    /// count; otherwise only the initial press does.
     pub fn is_key_pressed(&self, key: Key, is_key_repeat: bool) -> bool {
         let minifb_key = minifb::Key::from(key);
         self.window.is_key_pressed(
@@ -533,46 +689,64 @@ impl WindowManager {
         )
     }
 
+    /// Returns the current mouse position in window coordinates, or `None`
+    /// if the cursor is outside the window
     pub fn get_mouse_pos(&self) -> Option<(f32, f32)> {
         self.window.get_mouse_pos(minifb::MouseMode::Discard)
     }
 
+    /// Returns `true` if `mouse_key` is currently held down.
     pub fn get_mouse_down(&self, mouse_key: MouseKey) -> bool {
         self.window
             .get_mouse_down(minifb::MouseButton::from(mouse_key))
     }
 
+    /// Returns the vertical scroll wheel delta since the last poll (0 if none).
     pub fn get_scroll_wheel(&self) -> f32 {
         self.window.get_scroll_wheel().unwrap_or_default().1
     }
 
+    /// Returns a shared reference to the underlying `minifb` [`Window`].
     pub fn get_window(&self) -> &Window {
         &self.window
     }
+
+    /// Returns a mutable reference to the underlying `minifb` [`Window`].
     pub fn get_window_mut(&mut self) -> &mut Window {
         &mut self.window
     }
 
+    /// Returns the time elapsed between the two most recent [`Self::update`] calls.
     #[inline]
     pub fn since_last_frame(&self) -> Duration {
         self.last_render.duration_since(self.before_last_render)
     }
 
+    /// Returns [`Self::since_last_frame`] as seconds (`f32`). Handy for
+    /// frame-rate-independent movement/physics.
     #[inline(always)]
     pub fn delta_time(&self) -> f32 {
         self.since_last_frame().as_secs_f32()
     }
 
+    /// Returns [`Self::since_last_frame`] as seconds (`f64`), for higher
+    /// precision than [`Self::delta_time`].
     #[inline(always)]
     pub fn delta_time_f64(&self) -> f64 {
         self.since_last_frame().as_secs_f64()
     }
 
+    /// Returns the current OS window size, `(width, height)`.
     #[inline(always)]
     pub fn get_window_size(&self) -> (usize, usize) {
         self.window.get_size()
     }
 
+    /// Registers a render step, invoked whenever the window is resized (see
+    /// [`Self::update`]) to repopulate the freshly resized buffer. Multiple
+    /// steps can be registered; they run in registration order.
+    ///
+    /// See [`UserRenderStep`] for extra info
     pub fn add_render_step(
         &mut self,
         render_step: impl FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'static,
@@ -581,6 +755,11 @@ impl WindowManager {
             .push(UserRenderStepBox(Box::new(render_step)));
     }
 
+    /// Registers a draw step, invoked after render steps have finished
+    /// running on a resize (see [`Self::update`]). Multiple steps can be
+    /// registered; they run in registration order.
+    ///
+    /// See [`UserUpdateStep`] for extra info
     pub fn add_draw_step(
         &mut self,
         draw_step: impl FnMut(&mut WindowManager, usize, usize) + Clone + 'static,
@@ -604,6 +783,8 @@ impl WindowManager {
         }
     }
 
+    /// Loads `font` into the manager and returns a [`FontId`] handle for
+    /// referencing it in [`Self::draw_char`] / [`Self::draw_string`].
     pub fn load_font(&mut self, font: FontManager) -> FontId {
         let id = self.next_font_id;
         self.next_font_id.0 += 1;
@@ -611,10 +792,17 @@ impl WindowManager {
         id
     }
 
+    /// Unloads and returns the [`FontManager`] previously registered under
+    /// `font_id`, or `None` if it wasn't loaded.
     pub fn unload_font(&mut self, font_id: FontId) -> Option<FontManager> {
         self.loaded_fonts.remove(&font_id)
     }
 
+    /// Runs `func` with a shared reference to the current backing buffer.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     #[inline(always)]
     pub fn with_buffer<T>(&self, func: impl FnOnce(&PixelBuffer) -> T) -> Result<T, DrawError> {
         self.ensure_not_in_render_step()?;
@@ -622,6 +810,11 @@ impl WindowManager {
         Ok(func(&self.buff))
     }
 
+    /// Runs `func` with a mutable reference to the current backing buffer.
+    ///
+    /// # Errors
+    /// Returns [`DrawError::DrawDuringRenderStep`] if called during a
+    /// render step.
     #[inline(always)]
     pub fn with_buffer_mut<T>(
         &mut self,
