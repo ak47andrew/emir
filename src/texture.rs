@@ -4,11 +4,21 @@ use image::{GenericImageView, ImageReader};
 
 use crate::{buffer::Buffer, color::Color, error::TextureError, pixel_buffer::PixelBuffer};
 
+/// An image loaded from disk, ready to be blitted onto a [`PixelBuffer`]
 pub struct Texture {
     pub buff: PixelBuffer,
 }
 
 impl Texture {
+    /// Loads an image from `path`, decodes it, and converts it into a
+    /// `Texture` backed by a [`PixelBuffer`] of RGB [`Color`]s.
+    ///
+    /// The image is decoded to RGBA8 and then the alpha channel is
+    /// discarded (only RGB is kept per pixel).
+    ///
+    /// # Errors
+    /// Returns [`TextureError::OpenError`] if the file can't be opened, or
+    /// [`TextureError::DecodeError`] if it can't be decoded as an image.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, TextureError> {
         let path = path.as_ref();
         let img = ImageReader::open(path)
