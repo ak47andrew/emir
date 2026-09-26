@@ -11,6 +11,7 @@ use crate::mouse_key::MouseKey;
 use crate::pixel_buffer::PixelBuffer;
 use crate::window_options::{ResizeMode, WindowManagerOptions};
 use minifb::{KeyRepeat, ScaleMode, Window, WindowOptions};
+use vector2d::Vector2D;
 
 /// A user-supplied render step: runs when the window is resized, to redraw
 /// the buffer contents at the new size. See [`WindowManager::add_render_step`].
@@ -49,7 +50,7 @@ pub trait UserRenderStep {
     fn call(
         &mut self,
         window_manger: &mut WindowManager,
-        new_size: (usize, usize),
+        new_size: Vector2D<usize>,
         buffer: &mut PixelBuffer,
     );
     fn clone(&self) -> Box<dyn UserRenderStep>;
@@ -59,23 +60,23 @@ pub trait UserRenderStep {
 /// completed. See [`WindowManager::add_draw_step`].
 ///
 /// Implemented automatically for any
-/// `FnMut(&mut WindowManager, usize, usize) + Clone + 'static` closure, so
+/// `FnMut(&mut WindowManager, Vector2D<usize>) + Clone + 'static` closure, so
 /// you normally won't implement this trait by hand.
 pub trait UserUpdateStep {
-    fn call(&mut self, window_manger: &mut WindowManager, new_size: (usize, usize));
+    fn call(&mut self, window_manger: &mut WindowManager, new_size: Vector2D<usize>);
     fn clone(&self) -> Box<dyn UserUpdateStep>;
 }
 
-impl<F: FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'static> UserRenderStep
+impl<F: FnMut(&mut WindowManager, Vector2D<usize>, &mut PixelBuffer) + Clone + 'static> UserRenderStep
     for F
 {
     fn call(
         &mut self,
         window_manager: &mut WindowManager,
-        new_size: (usize, usize),
+        new_size: Vector2D<usize>,
         buffer: &mut PixelBuffer,
     ) {
-        self(window_manager, new_size.0, new_size.1, buffer)
+        self(window_manager, new_size, buffer)
     }
 
     fn clone(&self) -> Box<dyn UserRenderStep> {
@@ -83,9 +84,9 @@ impl<F: FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'sta
     }
 }
 
-impl<F: FnMut(&mut WindowManager, usize, usize) + Clone + 'static> UserUpdateStep for F {
-    fn call(&mut self, window_manager: &mut WindowManager, new_size: (usize, usize)) {
-        self(window_manager, new_size.0, new_size.1)
+impl<F: FnMut(&mut WindowManager, Vector2D<usize>) + Clone + 'static> UserUpdateStep for F {
+    fn call(&mut self, window_manager: &mut WindowManager, new_size: Vector2D<usize>) {
+        self(window_manager, new_size)
     }
 
     fn clone(&self) -> Box<dyn UserUpdateStep> {
@@ -133,8 +134,7 @@ pub struct FontId(u64);
 /// }
 /// ```
 pub struct WindowManager {
-    w: usize,
-    h: usize,
+    size: Vector2D<usize>,
 
     window: Window,
     buff: PixelBuffer,
@@ -156,8 +156,8 @@ impl WindowManager {
     ///
     /// # Errors
     /// Returns [`WindowError::Create`] if an attempt to open the window failed
-    pub fn new(w: usize, h: usize, options: WindowManagerOptions) -> Result<Self, WindowError> {
-        let buff: PixelBuffer = PixelBuffer::new(w, h);
+    pub fn new(size: Vector2D<usize>, options: WindowManagerOptions) -> Result<Self, WindowError> {
+        let buff: PixelBuffer = PixelBuffer::new(size);
 
         let mut window_options = WindowOptions::default();
         if let Some(resize_mode) = options.resize_mode.as_ref() {
@@ -168,7 +168,7 @@ impl WindowManager {
                 ResizeMode::Trim => ScaleMode::UpperLeft,
             };
         }
-        let mut window = Window::new(options.title.as_str(), w, h, window_options)
+        let mut window = Window::new(options.title.as_str(), size.x, size.y, window_options)
             .map_err(|x| WindowError::Create { source: x })?;
         log::info!("Initialized window");
         window.set_target_fps(options.fps_cap.map_or(0, |value| value.get() as usize));
@@ -178,8 +178,7 @@ impl WindowManager {
         Ok(WindowManager {
             buff,
             window,
-            w,
-            h,
+            size,
             before_last_render,
             last_render,
             render_steps: vec![],
@@ -245,11 +244,10 @@ impl WindowManager {
         self.ensure_not_in_render_step()?;
         // TODO: Would probably be a good idea to make sure we aren't inside a draw step either.
 
-        let size = self.get_window_size();
-        if self.w != size.0 || self.h != size.1 {
-            let mut buffer = PixelBuffer::new(size.0, size.1);
-            self.w = size.0;
-            self.h = size.1;
+        let size = self.get_window_size_vector();
+        if self.size.x != size.x || self.size.y != size.y {
+            let mut buffer = PixelBuffer::new(size);
+            self.size = size;
             self.during_render_step = true;
             self.call_user_render_steps(&mut buffer);
             self.during_render_step = false;
@@ -258,7 +256,7 @@ impl WindowManager {
         }
 
         self.window
-            .update_with_buffer(self.buff.to_array(), self.w, self.h)
+            .update_with_buffer(self.buff.to_array(), self.size.x, self.size.y)
             .map_err(|x| WindowError::Update { source: x })?;
         self.before_last_render = self.last_render;
         self.last_render = Instant::now();
@@ -285,12 +283,11 @@ impl WindowManager {
     /// (0 = fully existing pixel, 255 = fully `color`) and returns it
     fn blend_pixel_from(
         buff: &PixelBuffer,
-        x: usize,
-        y: usize,
+        addr: Vector2D<usize>,
         color: Color,
         alpha: u8,
     ) -> Result<Color, Error> {
-        Ok(buff.get_pixel(x, y)?.lerp(color, alpha as f32 / 255.0))
+        Ok(buff.get_pixel(addr)?.lerp(color, alpha as f32 / 255.0))
     }
 
     // fn blend_pixel(&self, x: usize, y: usize, color: Color, alpha: u8) -> Result<Color, Error> {
@@ -309,11 +306,11 @@ impl WindowManager {
         c: char,
         size: f32,
         color: Color,
-        position: (usize, usize),
-        buffer_size: (usize, usize),
+        position: Vector2D<usize>,
+        buffer_size: Vector2D<usize>,
     ) -> bool {
-        let (x, y) = position;
-        let (w, h) = buffer_size;
+        let (x, y) = (position.x, position.y);
+        let (w, h) = (buffer_size.x, buffer_size.y);
 
         let (metrics, bitmap) = font.prepare_character(c, size);
         if metrics.width == 0 || metrics.height == 0 {
@@ -330,10 +327,10 @@ impl WindowManager {
         for dy in 0..metrics.height.min(free_y) {
             for dx in 0..metrics.width.min(free_x) {
                 let coverage = bitmap[dy * metrics.width + dx];
+                let addr = position + Vector2D::new(dx, dy);
                 buff.set_pixel(
-                    x + dx,
-                    y + dy,
-                    Self::blend_pixel_from(buff, x + dx, y + dy, color, coverage).unwrap(),
+                    addr,
+                    Self::blend_pixel_from(buff, addr, color, coverage).unwrap(),
                 )
             }
         }
@@ -357,8 +354,7 @@ impl WindowManager {
         c: char,
         size: f32,
         color: Color,
-        x: usize,
-        y: usize,
+        addr: Vector2D<usize>,
     ) -> Result<bool, DrawError> {
         self.ensure_not_in_render_step()?;
 
@@ -372,8 +368,8 @@ impl WindowManager {
             c,
             size,
             color,
-            (x, y),
-            (self.w, self.h),
+            addr,
+            self.size,
         ))
     }
 
@@ -390,8 +386,7 @@ impl WindowManager {
         s: &str,
         size: f32,
         color: Color,
-        x: usize,
-        y: usize,
+        addr: Vector2D<usize>,
     ) -> Result<(), DrawError> {
         self.ensure_not_in_render_step()?;
 
@@ -399,15 +394,15 @@ impl WindowManager {
             return Err(DrawError::FontNotLoaded { font_id });
         };
 
-        for pos in font.layout(s, x, y, size).glyphs() {
+        for pos in font.layout(s, addr, size).glyphs() {
             Self::draw_char_font_into(
                 &mut self.buff,
                 font,
                 pos.parent,
                 size,
                 color,
-                (pos.x as usize, pos.y as usize),
-                (self.w, self.h),
+                Vector2D::new(pos.x, pos.y).as_usizes(),
+                self.size,
             );
         }
 
@@ -421,8 +416,7 @@ impl WindowManager {
     /// render step.
     pub fn draw_circle_fill(
         &mut self,
-        x: usize,
-        y: usize,
+        addr: Vector2D<usize>,
         r: u16,
         color: Color,
     ) -> Result<(), DrawError> {
@@ -433,10 +427,10 @@ impl WindowManager {
             // Range for r^2 - dy^2 is [0; r^2] so we don't give a fuck about checking
             let dx = (r * r - dy * dy).isqrt();
 
-            let x1 = x as i32 - dx;
-            let x2 = x as i32 + dx;
+            let x1 = addr.x as i32 - dx;
+            let x2 = addr.x as i32 + dx;
             self.buff.set_pixels_between_points(
-                (y as i32 + dy) as usize,
+                (addr.y as i32 + dy) as usize,
                 x1.max(0) as usize,
                 x2.max(0) as usize,
                 color,
@@ -454,8 +448,7 @@ impl WindowManager {
     /// render step.
     pub fn draw_circle_stroke(
         &mut self,
-        x: usize,
-        y: usize,
+        addr: Vector2D<usize>,
         r: usize,
         color: Color,
     ) -> Result<(), DrawError> {
@@ -467,19 +460,23 @@ impl WindowManager {
         let mut cy = 0i32;
         let mut p = 1 - r;
         const OFFSETS: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
-        let x0 = x.wrapping_sub(r as usize);
-        let y0 = y.wrapping_sub(r as usize);
+        let x0 = addr.x.wrapping_sub(r as usize);
+        let y0 = addr.y.wrapping_sub(r as usize);
 
         while cx >= cy {
             for (j, k) in OFFSETS {
                 self.buff.set_pixel(
-                    x0.overflowing_add((j * cx + r) as usize).0,
-                    y0.overflowing_add((k * cy + r) as usize).0,
+                    Vector2D::new(
+                        x0.overflowing_add((j * cx + r) as usize).0,
+                        y0.overflowing_add((k * cy + r) as usize).0,
+                    ),
                     color,
                 );
                 self.buff.set_pixel(
-                    x0.overflowing_add((k * cy + r) as usize).0,
-                    y0.overflowing_add((j * cx + r) as usize).0,
+                    Vector2D::new(
+                        x0.overflowing_add((k * cy + r) as usize).0,
+                        y0.overflowing_add((j * cx + r) as usize).0,
+                    ),
                     color,
                 );
             }
@@ -517,7 +514,7 @@ impl WindowManager {
         let mut y = y0;
 
         for x in x0..=x1 {
-            self.buff.set_pixel(x as usize, y as usize, color);
+            self.buff.set_pixel(Vector2D::new(x, y).as_usizes(), color);
             if D > 0 {
                 y += yi;
                 D += 2 * (dy - dx);
@@ -551,7 +548,7 @@ impl WindowManager {
         let mut x = x0;
 
         for y in y0..=y1 {
-            self.buff.set_pixel(x as usize, y as usize, color);
+            self.buff.set_pixel(Vector2D::new(x, y).as_usizes(), color);
             if D > 0 {
                 x += xi;
                 D += 2 * (dx - dy)
@@ -571,19 +568,18 @@ impl WindowManager {
     /// render step.
     pub fn draw_line(
         &mut self,
-        x0: usize,
-        y0: usize,
-        x1: usize,
-        y1: usize,
+        pos1: Vector2D<usize>,
+        pos2: Vector2D<usize>,
         color: Color,
     ) -> Result<(), DrawError> {
         // Bresenham's line algorithm: https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
         // I think because all of this is usizes, and we're handling x1 > x0 and y1 > y0, casting to and from i32 can't cause any trouble
-        let x0 = x0 as i32;
-        let y0 = y0 as i32;
-        let x1 = x1 as i32;
-        let y1 = y1 as i32;
+        let x0 = pos1.x as i32;
+        let y0 = pos1.y as i32;
+        let x1 = pos2.x as i32;
+        let y1 = pos2.y as i32;
 
+        // I'm not gonna convert all of this into Vector2Ds bc it's all local and doesn't matter much
         if (y1 - y0).abs() < (x1 - x0).abs() {
             if x0 > x1 {
                 self.draw_line_low(x1, y1, x0, y0, color)
@@ -606,16 +602,14 @@ impl WindowManager {
     /// render step.
     pub fn draw_rect_fill(
         &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
+        pos: Vector2D<usize>,
+        size: Vector2D<usize>,
         color: Color,
     ) -> Result<(), DrawError> {
         self.ensure_not_in_render_step()?;
 
-        for dy in 0..h {
-            self.buff.set_pixel_range_from_value(x, y + dy, w, color);
+        for dy in 0..size.y {
+            self.buff.set_pixel_range_from_value(pos + Vector2D::new(0, dy), size.x, color);
         }
 
         Ok(())
@@ -629,30 +623,28 @@ impl WindowManager {
     /// render step.
     pub fn draw_rect_stroke(
         &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
+        pos: Vector2D<usize>,
+        size: Vector2D<usize>,
         color: Color,
     ) -> Result<(), DrawError> {
         self.ensure_not_in_render_step()?;
 
-        match h {
+        match size.y {
             0 => {}
             1 => {
-                self.buff.set_pixel_range_from_value(x, y, w, color);
+                self.buff.set_pixel_range_from_value(pos, size.x, color);
             }
             2 => {
-                self.buff.set_pixel_range_from_value(x, y, w, color);
-                self.buff.set_pixel_range_from_value(x, y + 1, w, color);
+                self.buff.set_pixel_range_from_value(pos, size.x, color);
+                self.buff.set_pixel_range_from_value(pos + Vector2D::new(0, 1), size.x, color);
             }
             _ => {
-                self.buff.set_pixel_range_from_value(x, y, w, color);
-                for dy in 1..=h - 2 {
-                    self.buff.set_pixel(x, y + dy, color);
-                    self.buff.set_pixel(x + w, y + dy, color);
+                self.buff.set_pixel_range_from_value(pos, size.x, color);
+                for dy in 1..=size.y - 2 {
+                    self.buff.set_pixel(pos + Vector2D::new(0, dy), color);
+                    self.buff.set_pixel(pos + Vector2D::new(size.x, dy), color);
                 }
-                self.buff.set_pixel_range_from_value(x, y + h - 1, w, color);
+                self.buff.set_pixel_range_from_value(pos + Vector2D::new(0, size.y-1), size.x, color);
             }
         }
 
@@ -739,6 +731,13 @@ impl WindowManager {
         self.window.get_size()
     }
 
+    /// Returns the current OS window size as [`Vector2D`].
+    #[inline(always)]
+    pub fn get_window_size_vector(&self) -> Vector2D<usize> {
+        let (x, y) = self.window.get_size();
+        Vector2D::new(x, y)
+    }
+
     /// Registers a render step, invoked whenever the window is resized (see
     /// [`Self::update`]) to repopulate the freshly resized buffer. Multiple
     /// steps can be registered; they run in registration order.
@@ -746,7 +745,7 @@ impl WindowManager {
     /// See [`UserRenderStep`] for extra info
     pub fn add_render_step(
         &mut self,
-        render_step: impl FnMut(&mut WindowManager, usize, usize, &mut PixelBuffer) + Clone + 'static,
+        render_step: impl FnMut(&mut WindowManager, Vector2D<usize>, &mut PixelBuffer) + Clone + 'static,
     ) {
         self.render_steps
             .push(UserRenderStepBox(Box::new(render_step)));
@@ -759,13 +758,13 @@ impl WindowManager {
     /// See [`UserUpdateStep`] for extra info
     pub fn add_draw_step(
         &mut self,
-        draw_step: impl FnMut(&mut WindowManager, usize, usize) + Clone + 'static,
+        draw_step: impl FnMut(&mut WindowManager, Vector2D<usize>) + Clone + 'static,
     ) {
         self.draw_steps.push(UserUpdateStepBox(Box::new(draw_step)));
     }
 
     fn call_user_render_steps(&mut self, buffer: &mut PixelBuffer) {
-        let size = self.get_window_size();
+        let size = self.get_window_size_vector();
 
         for mut step in self.render_steps.clone() {
             step.0.call(self, size, buffer);
@@ -773,7 +772,7 @@ impl WindowManager {
     }
 
     fn call_user_draw_steps(&mut self) {
-        let size = self.get_window_size();
+        let size = self.get_window_size_vector();
 
         for mut step in self.draw_steps.clone() {
             step.0.call(self, size);

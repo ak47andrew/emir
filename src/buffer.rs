@@ -1,3 +1,4 @@
+use vector2d::Vector2D;
 use crate::error;
 
 /// Buffer is a fixed-size 2D matrix of elements T with helper functions, allowing you to work with
@@ -32,16 +33,14 @@ use crate::error;
 /// ```
 #[derive(Clone, Debug)]
 pub struct Buffer<T> {
-    pub w: usize,
-    pub h: usize,
+    pub size: Vector2D<usize>,
     pub buff: Vec<T>,
 }
 
 impl<T: Default> Default for Buffer<T> {
     fn default() -> Self {
         Self {
-            w: Default::default(),
-            h: Default::default(),
+            size: Vector2D { x: 0, y: 0 },
             buff: Default::default(),
         }
     }
@@ -59,11 +58,10 @@ impl<T: Default + Clone> Buffer<T> {
     /// use emir::buffer::Buffer;
     /// let buffer = Buffer::<u8>::new(16, 16);
     /// ```
-    pub fn new(w: usize, h: usize) -> Self {
+    pub fn new(size: Vector2D<usize>) -> Self {
         Self {
-            buff: vec![T::default(); w * h],
-            w,
-            h,
+            buff: vec![T::default(); size.x * size.y],
+            size
         }
     }
 }
@@ -92,18 +90,17 @@ impl<T: Clone> Buffer<T> {
     /// // Now we can work with it
     /// // <...>
     /// ```
-    pub fn from_element(w: usize, h: usize, default_element: T) -> Self {
+    pub fn from_element(size: Vector2D<usize>, default_element: T) -> Self {
         Self {
-            buff: vec![default_element; w * h],
-            w,
-            h,
+            buff: vec![default_element; size.x * size.y],
+            size
         }
     }
 
     /// Same as [`Buffer::get_unchecked`], but returns owned value instead of a reference
     #[inline]
-    pub unsafe fn get_unchecked_cloned(&self, x: usize, y: usize) -> T {
-        unsafe { self.get_unchecked(x, y).clone() }
+    pub unsafe fn get_unchecked_cloned(&self, addr: Vector2D<usize>) -> T {
+        unsafe { self.get_unchecked(addr).clone() }
     }
 
     /// Same as [`Buffer::get`], but returns owned value instead of a reference
@@ -111,8 +108,8 @@ impl<T: Clone> Buffer<T> {
     /// # Safety
     /// Caller must ensure that x < self.w and y < self.h, or you might get UB
     #[inline]
-    pub fn get_cloned(&self, x: usize, y: usize) -> Option<T> {
-        self.get(x, y).cloned()
+    pub fn get_cloned(&self, addr: Vector2D<usize>) -> Option<T> {
+        self.get(addr).cloned()
     }
 
     /// Consumes `self` and returns [`BufferIterator`] that returns data by lines.
@@ -130,7 +127,7 @@ impl<T: Clone> Buffer<T> {
     /// ```
     pub fn lines(self) -> BufferIterator<T> {
         BufferIterator {
-            w: self.w,
+            w: self.size.x,
             data: self.buff.into_boxed_slice(),
             position: 0,
         }
@@ -186,8 +183,8 @@ impl<T> Buffer<T> {
     /// println!("{}", get_odd_elements_on_range(&buff, 1, 32, 17).len());
     /// ```
     #[inline]
-    pub unsafe fn get_unchecked(&self, x: usize, y: usize) -> &T {
-        unsafe { self.buff.get_unchecked(Self::idx(x, y, self.w)) }
+    pub unsafe fn get_unchecked(&self, addr: Vector2D<usize>) -> &T {
+        unsafe { self.buff.get_unchecked(self.idx(addr)) }
     }
 
     /// Gets an element at the specified coordinates returning None if OOB.
@@ -208,8 +205,8 @@ impl<T> Buffer<T> {
     /// assert_eq!(buff.get(9999, 9999), None);
     /// ```
     #[inline]
-    pub fn get(&self, x: usize, y: usize) -> Option<&T> {
-        self.buff.get(Self::idx(x, y, self.w))
+    pub fn get(&self, addr: Vector2D<usize>) -> Option<&T> {
+        self.buff.get(self.idx(addr))
     }
 
     /// Constructs a [`Buffer`] from given iterator and width. Height is derived automatically from
@@ -258,9 +255,9 @@ impl<T> Buffer<T> {
                 iterator_size: buff.len(),
             });
         }
+        let size = Vector2D { x: w, y: buff.len() / w };
         Ok(Self {
-            w,
-            h: buff.len() / w,
+            size,
             buff,
         })
     }
@@ -293,8 +290,8 @@ impl<T> Buffer<T> {
     /// }
     /// ```
     #[inline(always)]
-    pub fn idx(x: usize, y: usize, w: usize) -> usize {
-        y * w + x
+    pub fn idx(&self, addr: Vector2D<usize>) -> usize {
+        addr.y * self.size.x + addr.x
     }
 
     /// Writes value to the specified coordinates using unsafe `get_unchecked_mut` function,
@@ -331,9 +328,10 @@ impl<T> Buffer<T> {
     /// assert_eq!(buff.get_cloned(15, 15), Some(30));
     /// ```
     #[inline]
-    pub unsafe fn set_unchecked(&mut self, x: usize, y: usize, value: T) {
+    pub unsafe fn set_unchecked(&mut self, addr: Vector2D<usize>, value: T) {
         unsafe {
-            *self.buff.get_unchecked_mut(Self::idx(x, y, self.w)) = value;
+            let pos = self.idx(addr);
+            *self.buff.get_unchecked_mut(pos) = value;
         }
     }
 
@@ -348,11 +346,11 @@ impl<T> Buffer<T> {
     ///
     /// # Returns
     /// `true` if write was success, `false` otherwise
-    pub fn set(&mut self, x: usize, y: usize, value: T) -> bool {
-        if x >= self.w || y >= self.h {
+    pub fn set(&mut self, addr: Vector2D<usize>, value: T) -> bool {
+        if addr.x >= self.size.x || addr.y >= self.size.y {
             return false;
         }
-        unsafe { self.set_unchecked(x, y, value); }
+        unsafe { self.set_unchecked(addr, value); }
         true
     }
 }

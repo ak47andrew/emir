@@ -402,6 +402,7 @@ dependencies = [
  "log",
  "minifb",
  "thiserror",
+ "vector2d",
 ]
 
 [[package]]
@@ -1659,6 +1660,12 @@ dependencies = [
  "num-traits",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "vector2d"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567b2fa9c7ae37b0c180cdda3aebed26cbbd81344bcfeedd7650eeb8088b5a7b"
 
 [[package]]
 name = "version-compare"

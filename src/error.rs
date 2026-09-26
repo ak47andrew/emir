@@ -1,5 +1,5 @@
 use image::ImageError;
-
+use vector2d::Vector2D;
 use crate::window_manager::FontId;
 
 #[derive(thiserror::Error, Debug)]
@@ -45,12 +45,10 @@ pub enum PixelBufferError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum BufferError {
-    #[error("Invalid address/out of bounds. Trying to access {x}x{y} on a {w}x{h} buffer")]
+    #[error("Invalid address/out of bounds. Trying to access {access:?} on a {size:?} buffer")]
     InvalidAddress {
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
+        access: Vector2D<usize>,
+        size: Vector2D<usize>,
     },
 
     #[error(

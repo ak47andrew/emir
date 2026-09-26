@@ -3,6 +3,7 @@ use crate::window_manager::WindowManager;
 use fontdue::layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle};
 use fontdue::{Font, FontSettings, Metrics};
 use std::{fs, io, slice};
+use vector2d::Vector2D;
 
 /// Struct responsible for loading and rasterizing text as well as generating layout for text-writing
 /// methods at [`WindowManager`]
@@ -78,8 +79,8 @@ impl FontManager {
     /// // Now we can use `x` and `y` values to, for example, draw a bounding box for our text
     /// ```
     pub fn measure_string(&self, s: &str, px: f32) -> (f32, f32) {
-        let layout = self.layout(s, 0, 0, px);
-        
+        let layout = self.layout(s, Vector2D::new(0, 0), px);
+
         let mut width: f32 = 0.0;
         for glyph in layout.glyphs() {
             let right_edge = glyph.x + glyph.width as f32;
@@ -92,15 +93,14 @@ impl FontManager {
         (width, height)
     }
 
-    pub(crate) fn layout(&self, s: &str, x: usize, y: usize, font_size: f32) -> Layout {
+    pub(crate) fn layout(&self, s: &str, addr: Vector2D<usize>, font_size: f32) -> Layout {
         // TODO: think about automatic wrapping
         let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
         layout.reset(&LayoutSettings {
-            x: x as f32,
-            y: y as f32,
+            x: addr.x as f32,
+            y: addr.y as f32,
             ..LayoutSettings::default()
         });
-        // TODO: cloning font here is kinda expensive, but for now I can't find any better solution to it
         layout.append(
             slice::from_ref(&self.font),
             &TextStyle::new(s, font_size, 0),
