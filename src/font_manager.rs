@@ -18,7 +18,6 @@ use std::{fs, io, slice};
 /// ```
 pub struct FontManager {
     font: Font,
-    pub spacing: usize,  // TODO: I fixed it with `.layout()`. Remove it
 }
 
 impl FontManager {
@@ -59,7 +58,6 @@ impl FontManager {
                     reason: x.to_string(),
                 }
             })?,
-            spacing: 0,
         })
     }
 
@@ -79,18 +77,22 @@ impl FontManager {
     ///
     /// // Now we can use `x` and `y` values to, for example, draw a bounding box for our text
     /// ```
-    pub fn measure_string(&self, s: &str, px: f32) -> (usize, usize) {
-        let width = s
-            .chars()
-            .map(|c| self.prepare_character(c, px).0.width)
-            .sum::<usize>()
-            + (s.len() - 1) * self.spacing;
-        let height = (s.chars().filter(|&x| x == '\n').count() + 1) * px as usize;
+    pub fn measure_string(&self, s: &str, px: f32) -> (f32, f32) {
+        let layout = self.layout(s, 0, 0, px);
+        
+        let mut width: f32 = 0.0;
+        for glyph in layout.glyphs() {
+            let right_edge = glyph.x + glyph.width as f32;
+            if right_edge > width {
+                width = right_edge;
+            }
+        }
+        let height = layout.height();
 
         (width, height)
     }
 
-    pub(crate) fn layout(&self, s: &str, x: usize, y: usize, font_size: f32) -> Vec<GlyphPosition> {
+    pub(crate) fn layout(&self, s: &str, x: usize, y: usize, font_size: f32) -> Layout {
         // TODO: think about automatic wrapping
         let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
         layout.reset(&LayoutSettings {
@@ -103,13 +105,6 @@ impl FontManager {
             slice::from_ref(&self.font),
             &TextStyle::new(s, font_size, 0),
         );
-        // TODO: maybe also do something here?
-        layout.glyphs().clone()
-    }
-
-    #[deprecated(since = "0.5.0", note = "spacing was a workaround before .layout existed. Spacing is unused and has no effect on code")]
-    pub fn with_spacing(mut self, spacing: usize) -> Self {
-        self.spacing = spacing;
-        self
+        layout
     }
 }

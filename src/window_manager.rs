@@ -399,9 +399,7 @@ impl WindowManager {
             return Err(DrawError::FontNotLoaded { font_id });
         };
 
-        let positions = font.layout(s, x, y, size);
-
-        for pos in positions {
+        for pos in font.layout(s, x, y, size).glyphs() {
             Self::draw_char_font_into(
                 &mut self.buff,
                 font,

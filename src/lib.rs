@@ -12,3 +12,4 @@ pub mod window_options;
 
 pub use error::Error;
 pub use minifb;
+pub use vector2d::Vector2D;
