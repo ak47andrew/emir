@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 emir = { path = "../.." }
 env_logger = "0.11.11"
+
+[profile.release]
+debug = true   # symbols in the release build

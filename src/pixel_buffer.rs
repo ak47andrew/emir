@@ -134,8 +134,15 @@ impl PixelBuffer {
     /// Rows that would fall outside `self` are clipped via the same
     /// wraparound behavior as [`Self::set_pixel_range_from_array`].
     pub fn blit(&mut self, x: usize, y: usize, other: &PixelBuffer) {
-        for (ind, line) in other.buff.clone().lines().enumerate() {
-            self.set_pixel_range_from_array(x, y + ind, &line);
+        let (sw, sh) = (self.buff.w, self.buff.h);
+        let (ow, oh) = (other.buff.w, other.buff.h);
+        if x >= sw || y >= sh { return; }
+        let copy_w = ow.min(sw - x);
+        let copy_h = oh.min(sh - y);
+        for row in 0..copy_h {
+            let src = &other.buff.buff[row * ow..row * ow + copy_w];
+            let dst = (y + row) * sw + x;
+            self.buff.buff[dst..dst + copy_w].copy_from_slice(src);
         }
     }
 

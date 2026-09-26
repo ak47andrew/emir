@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::time::Instant;
 
 use emir::color::Color;
 use emir::font_manager::FontManager;
@@ -7,13 +7,13 @@ use emir::texture::Texture;
 use emir::window_manager::WindowManager;
 use emir::window_options::{ResizeMode, WindowManagerOptions};
 
-pub const WIDTH: usize = 100;
-pub const HEIGHT: usize = 100;
+pub const WIDTH: usize = 2880;
+pub const HEIGHT: usize = 1800;
 
 fn main() {
     env_logger::init();
 
-    let options = WindowManagerOptions::new("Emir", NonZeroU32::new(999), Some(ResizeMode::Trim));
+    let options = WindowManagerOptions::new("Emir", None, Some(ResizeMode::Trim));
     let mut window_wrapper: WindowManager = WindowManager::new(WIDTH, HEIGHT, options).unwrap();
     let font_manager = match FontManager::from_raw(Vec::from(include_bytes!("../font.ttf"))) {
         Ok(m) => m.with_spacing(4),
@@ -66,6 +66,10 @@ fn main() {
     let mut x_direction = 1.0;
     let mut y_direction = 1.0;
 
+
+    let mut last_time = Instant::now();
+    let mut frame_count = 0;
+
     while !window_wrapper.should_close() {
         let delta = window_wrapper.delta_time();
         let size = window_wrapper.get_window_size();
@@ -90,5 +94,15 @@ fn main() {
             .with_buffer_mut(|buff| buff.blit_texture(x_pos as usize, y_pos as usize, &img))
             .unwrap();
         window_wrapper.update().unwrap();
+
+        frame_count += 1;
+        let elapsed = last_time.elapsed().as_secs_f32();
+
+        if elapsed >= 1.0 {
+            let fps = frame_count as f32 / elapsed;
+            window_wrapper.get_window_mut().set_title(&format!("Emir - FPS: {:.2}", fps));
+            frame_count = 0;
+            last_time = Instant::now();
+        }
     }
 }
