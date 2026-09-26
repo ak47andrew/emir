@@ -449,7 +449,7 @@ impl WindowManager {
     pub fn draw_circle_stroke(
         &mut self,
         addr: Vector2D<usize>,
-        r: usize,
+        r: u16,
         color: Color,
     ) -> Result<(), DrawError> {
         self.ensure_not_in_render_step()?;
