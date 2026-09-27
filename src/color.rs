@@ -39,6 +39,47 @@ impl Color {
         Self(((r as u32) << 16) | ((g as u32) << 8) | b as u32)
     }
 
+    pub fn from_hsl(h: f32, s: f32, l: f32) -> Self {
+        let s_norm = s / 100.0;
+        let l_norm = l / 100.0;
+
+        let c = (1.0 - (2.0 * l_norm - 1.0).abs()) * s_norm;
+        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+        
+        let (r_1, g_1, b_1) = match h {
+            0.0..60.0 => {
+                (c, x, 0.0)
+            }
+            60.0..120.0 => {
+                (x, c, 0.0)
+            }
+            120.0..180.0 => {
+                (0.0, c, x)
+            }
+            180.0..240.0 => {
+                (0.0, x, c)
+            }
+            240.0..300.0 => {
+                (x, 0.0, c)
+            }
+            _ => {
+                (c, 0.0, x)
+            }
+        };
+
+        let m = l_norm - c / 2.0;
+
+        let r_norm = r_1 + m;
+        let g_norm = g_1 + m;
+        let b_norm = b_1 + m;
+
+        Self::new(
+            (r_norm * 255.0) as u8,
+            (g_norm * 255.0) as u8,
+            (b_norm * 255.0) as u8,
+        )
+    }
+
     /// Returns red channel of the color
     ///
     /// # Example
@@ -170,6 +211,69 @@ impl Color {
             lerp_channel!(self.r(), other.r()),
             lerp_channel!(self.g(), other.g()),
             lerp_channel!(self.b(), other.b()),
+        )
+    }
+
+    fn to_hsl(&self) -> (f32, f32, f32) {
+        let r_norm = self.r() as f32 / 255.0;
+        let g_norm = self.g() as f32 / 255.0;
+        let b_norm = self.b() as f32 / 255.0;
+
+        let c_max = r_norm.max(g_norm).max(b_norm);
+        let c_min = r_norm.min(g_norm).min(b_norm);
+
+        let delta = c_max - c_min;
+        let l = (c_max + c_min) / 2.0;
+
+        let s = if delta == 0.0 { 0.0 } else {
+            delta / (1.0 - (2.0 * l - 1.0).abs())
+        };
+
+        let h = if delta == 0.0 {0.0} else {
+            (
+                if c_max == r_norm {
+                    60.0 * ((g_norm - b_norm) / delta)
+                } else if c_max == g_norm {
+                    60.0 * ((b_norm - r_norm) / delta) + 2.0
+                } else {
+                    60.0 * ((r_norm - g_norm) / delta) + 4.0
+                }
+            ) % 360.0
+        };
+
+        (h, s, l)
+    }
+
+    pub fn complementary(&self) -> Self {
+        let (h, s, l) = self.to_hsl();
+
+        Self::from_hsl((h + 180.0) % 360.0, s, l)
+    }
+
+    pub fn analogous(&self) -> (Self, Self) {
+        let (h, s, l) = self.to_hsl();
+
+        (
+            Self::from_hsl((h + 30.0) % 360.0, s, l),
+            Self::from_hsl((h - 30.0) % 360.0, s, l)
+        )
+    }
+
+    pub fn triadic(&self) -> (Self, Self) {
+        let (h, s, l) = self.to_hsl();
+
+        (
+            Self::from_hsl((h + 120.0) % 360.0, s, l),
+            Self::from_hsl((h - 120.0) % 360.0, s, l)
+        )
+    }
+
+    pub fn split_complementary(&self) -> (Self, Self) {
+        let (h, s, l) = self.to_hsl();
+
+        (
+            Self::from_hsl((h + 150.0) % 360.0, s, l),
+            Self::from_hsl((h - 210.0) % 360.0, s, l)
         )
     }
 }
