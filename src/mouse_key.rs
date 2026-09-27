@@ -1,3 +1,4 @@
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub enum MouseKey {
     Left,
     Middle,

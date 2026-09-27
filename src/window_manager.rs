@@ -149,6 +149,10 @@ pub struct WindowManager {
     next_font_id: FontId,
 
     during_render_step: bool,
+
+    mouse_pressed: HashMap<MouseKey, bool>,
+    mouse_released: HashMap<MouseKey, bool>,
+    mouse_down: HashMap<MouseKey, bool>,
 }
 
 impl WindowManager {
@@ -175,6 +179,13 @@ impl WindowManager {
 
         let before_last_render = Instant::now();
         let last_render = Instant::now();
+
+        let mouse_hashmaps = HashMap::from([
+            (MouseKey::Left, false),
+            (MouseKey::Right, false),
+            (MouseKey::Middle, false),
+        ]);
+
         Ok(WindowManager {
             buff,
             window,
@@ -186,6 +197,9 @@ impl WindowManager {
             loaded_fonts: HashMap::new(),
             next_font_id: FontId(0),
             during_render_step: false,
+            mouse_pressed: mouse_hashmaps.clone(),
+            mouse_released: mouse_hashmaps.clone(),
+            mouse_down: mouse_hashmaps.clone(),
         })
     }
 
@@ -260,6 +274,15 @@ impl WindowManager {
             .map_err(|x| WindowError::Update { source: x })?;
         self.before_last_render = self.last_render;
         self.last_render = Instant::now();
+
+        for key in [MouseKey::Left, MouseKey::Middle, MouseKey::Right] {
+            let is_down_now = self.get_mouse_down(key);
+            let down_before = self.mouse_down[&key];
+
+            self.mouse_pressed.insert(key, is_down_now && !down_before);
+            self.mouse_released.insert(key, !is_down_now && down_before);
+            self.mouse_down.insert(key, is_down_now);
+        }
 
         Ok(())
     }
@@ -688,6 +711,14 @@ impl WindowManager {
     pub fn get_mouse_down(&self, mouse_key: MouseKey) -> bool {
         self.window
             .get_mouse_down(minifb::MouseButton::from(mouse_key))
+    }
+
+    pub fn get_mouse_pressed(&self, mouse_key: MouseKey) -> bool {
+        self.mouse_pressed[&mouse_key]
+    }
+
+    pub fn get_mouse_released(&self, mouse_key: MouseKey) -> bool {
+        self.mouse_released[&mouse_key]
     }
 
     /// Returns the vertical scroll wheel delta since the last poll (0 if none).
