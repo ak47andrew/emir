@@ -153,6 +153,11 @@ pub struct WindowManager {
     mouse_pressed: HashMap<MouseKey, bool>,
     mouse_released: HashMap<MouseKey, bool>,
     mouse_down: HashMap<MouseKey, bool>,
+
+    // FPS stuff
+    fps_last_time: Instant,
+    fps_frame_count: u32,
+    fps: f32,
 }
 
 impl WindowManager {
@@ -200,6 +205,9 @@ impl WindowManager {
             mouse_pressed: mouse_hashmaps.clone(),
             mouse_released: mouse_hashmaps.clone(),
             mouse_down: mouse_hashmaps.clone(),
+            fps_last_time: Instant::now(),
+            fps_frame_count: 0,
+            fps: 0.0,
         })
     }
 
@@ -282,6 +290,15 @@ impl WindowManager {
             self.mouse_pressed.insert(key, is_down_now && !down_before);
             self.mouse_released.insert(key, !is_down_now && down_before);
             self.mouse_down.insert(key, is_down_now);
+        }
+
+        self.fps_frame_count += 1;
+        let elapsed = self.fps_last_time.elapsed().as_secs_f32();
+
+        if elapsed >= 1.0 {
+            self.fps = self.fps_frame_count as f32 / elapsed;
+            self.fps_frame_count = 0;
+            self.fps_last_time = Instant::now();
         }
 
         Ok(())
@@ -850,5 +867,13 @@ impl WindowManager {
         self.ensure_not_in_render_step()?;
 
         Ok(func(&mut self.buff))
+    }
+
+    pub fn clear_buffer(&mut self) {
+        self.buff.buff.buff.fill(Color::from_u32(0));  // 00RRGGBB
+    }
+
+    pub fn get_fps(&self) -> f32 {
+        self.fps
     }
 }
